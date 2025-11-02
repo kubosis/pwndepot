@@ -183,3 +183,6 @@ chroma_db/
 *.db
 
 app/backend/.env
+
+# backend test user
+testuser.txt

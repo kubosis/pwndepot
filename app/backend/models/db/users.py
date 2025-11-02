@@ -23,7 +23,7 @@ class UserAccount(Base):
         Enum(RoleEnum, name="role_enum", native_enum=False), nullable=False, default=RoleEnum.USER
     )
 
-    hashed_password: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    hashed_password: Mapped[str | None] = mapped_column(String(1024), nullable=False)
 
     is_email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 

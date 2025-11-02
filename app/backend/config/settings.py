@@ -24,6 +24,8 @@ class BackendBaseSettings(pydantic_settings.BaseSettings):
     SERVER_HOST: str = decouple.config("SERVER_HOST", cast=str)  # type: ignore
     SERVER_PORT: int = decouple.config("SERVER_PORT", cast=int)  # type: ignore
 
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = decouple.config("ACCESS_TOKEN_EXPIRE_MINUTES", cast=int)  # type: ignore
+
     # CORS middleware settings
     ALLOWED_ORIGINS: list[str] = [
         "http://localhost:3000",  # reactJS

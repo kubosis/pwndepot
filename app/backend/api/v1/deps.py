@@ -1,28 +1,30 @@
-from collections.abc import Callable, Generator
+from collections.abc import AsyncGenerator, Callable
 from typing import Annotated
 
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel, ValidationError
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.backend.config.settings import get_settings
-from app.backend.models.db.session import engine
-from app.backend.models.db.users import UserAccount
+from app.backend.models.db.session import AsyncSessionLocal
+from app.backend.models.db.users import RoleEnum, UserAccount
+from app.backend.repository.base import BaseCRUDRepository
+from app.backend.repository.users import UserCRUDRepository
 
 settings = get_settings()
 
 
-reusable_oauth2 = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/login/access-token")
+reusable_oauth2 = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/users/login")
 
 
-def get_db() -> Generator[Session, None, None]:
-    with Session(engine) as session:
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    async with AsyncSessionLocal() as session:
         yield session
 
 
-SessionDep = Annotated[Session, Depends(get_db)]
+AsyncSessionDep = Annotated[AsyncSession, Depends(get_db)]
 TokenDep = Annotated[str, Depends(reusable_oauth2)]
 
 
@@ -31,40 +33,87 @@ class TokenPayload(BaseModel):
     exp: int | None = None
 
 
-def get_current_user(session: SessionDep, token: TokenDep) -> UserAccount:
+async def get_current_user(session: AsyncSessionDep, token: TokenDep) -> UserAccount:
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
         token_data = TokenPayload(**payload)
-    except ValidationError:
+
+    # --- EXCEPTION HANDLING ---
+    except jwt.ExpiredSignatureError:
+        # 1. Token Expired error
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Could not validate credentials",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expired. Please log in again.",
+            headers={"WWW-Authenticate": "Bearer"},
         ) from None
-    user = session.get(UserAccount, token_data.sub)
+    except (jwt.PyJWTError, ValidationError):
+        # 2. Catch all other general invalid token errors
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials. Invalid token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from None
+
+    user = await session.get(UserAccount, int(token_data.sub))
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    # Assuming is_active and is_superuser are attributes of UserAccount
-    if hasattr(user, "is_active") and not user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found. Invalid token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from None
     return user
 
 
-CurrentUser = Annotated[UserAccount, Depends(get_current_user)]
+""" Dependency that injects user - checks if the user is logged in """
+CurrentUserDep = Annotated[UserAccount, Depends(get_current_user)]
 
 
-def get_current_active_superuser(current_user: CurrentUser) -> UserAccount:
-    if hasattr(current_user, "is_superuser") and not current_user.is_superuser:
-        raise HTTPException(status_code=403, detail="The user doesn't have enough privileges")
+async def get_current_superuser(current_user: CurrentUserDep):
+    if current_user.role != RoleEnum.ADMIN:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized access to the resource")
     return current_user
 
 
-def get_repository(repo_type) -> Callable:
-    def _get_repo(session: SessionDep):
-        # PasswordManager is required for UserCRUDRepository
+""" Dependency that injects admin (checks if the user is logged in and has admin privileges """
+CurrentAdminDep = Annotated[UserAccount, Depends(get_current_superuser)]
+
+
+def get_repository(repo_type: type[BaseCRUDRepository]) -> Callable:
+    def _get_repo(session: AsyncSessionDep):
         if repo_type.__name__ == "UserCRUDRepository":
+            # PasswordManager is required for UserCRUDRepository
             from app.backend.security.password import PasswordManager
 
-            return repo_type(session, PasswordManager())
+            return UserCRUDRepository(session, PasswordManager())
         return repo_type(session)
 
     return _get_repo
+
+
+UserRepositoryDep = Annotated[BaseCRUDRepository, Depends(get_repository(repo_type=UserCRUDRepository))]
+
+
+def get_self_or_admin(
+    # FastAPI will automatically pass the path parameter 'user_id'
+    user_id: int,
+    current_user: CurrentUserDep,
+) -> UserAccount:
+    """
+    A dependency that checks if the current user is:
+    1. The user they are trying to modify (is_self)
+    2. An admin
+
+    If neither, it raises a 403 Forbidden error.
+    """
+    is_self = current_user.id == user_id
+    is_admin = current_user.role == RoleEnum.ADMIN
+
+    if not is_self and not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to perform this action on this user."
+        )
+
+    return current_user
+
+
+CurrentUserOrAdminDep = Annotated[UserAccount, Depends(get_self_or_admin)]

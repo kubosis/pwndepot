@@ -6,20 +6,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import functions as sqlalchemy_functions
 
 from app.backend.models.db.users import UserAccount
-from app.backend.models.schema.users import UserInCreate, UserInLogin, UserInUpdate
+from app.backend.models.schema.users import UserInCreate, UserInUpdate
 from app.backend.repository.base import BaseCRUDRepository
 from app.backend.security.password import PasswordManager
-from app.backend.utils.exceptions import DBEntityAlreadyExists, DBEntityDoesNotExist, PasswordDoesNotMatch
+from app.backend.utils.exceptions import DBEntityAlreadyExists, DBEntityDoesNotExist
 
 
 class UserCRUDRepository(BaseCRUDRepository):
     def __init__(self, async_session: AsyncSession, pwd_manager: PasswordManager):
         super().__init__(async_session)
-        self._pwd_manager = pwd_manager
+        self.pwd_manager = pwd_manager
 
-    async def create_account(self, account_create: UserInCreate) -> UserAccount:
+    async def create_account(self, account_create: UserInCreate) -> UserAccount | None:
         try:
-            hashed_pwd = self._pwd_manager.hash_password(account_create.password)
+            hashed_pwd = self.pwd_manager.hash_password(account_create.password)
             new_account = UserAccount(
                 username=account_create.username, email=account_create.email, hashed_password=hashed_pwd
             )
@@ -29,61 +29,32 @@ class UserCRUDRepository(BaseCRUDRepository):
             await self.async_session.refresh(instance=new_account)
 
             return new_account
-        except IntegrityError as e:
+        except IntegrityError:
             await self.async_session.rollback()
-            raise DBEntityAlreadyExists("Account with the specified username and/or email already exists") from e
+            return None
 
     async def read_accounts(self) -> typing.Sequence[UserAccount]:
         stmt = sqlalchemy.select(UserAccount)
         query = await self.async_session.execute(statement=stmt)
         return query.scalars().all()
 
-    async def read_account_by_id(self, id_: int) -> UserAccount:
+    async def read_account_by_id(self, id_: int) -> UserAccount | None:
         stmt = sqlalchemy.select(UserAccount).where(UserAccount.id == id_)
         query = await self.async_session.execute(statement=stmt)
-        result = query.scalar()
+        return query.scalar()
 
-        if not result:
-            raise DBEntityDoesNotExist(f"Account with id `{id_}` does not exist!")
-
-        return result
-
-    async def read_account_by_username(self, username: str) -> UserAccount:
+    async def read_account_by_username(self, username: str) -> UserAccount | None:
         stmt = sqlalchemy.select(UserAccount).where(UserAccount.username == username)
         query = await self.async_session.execute(statement=stmt)
-        result = query.scalar()
+        return query.scalar()
 
-        if not result:
-            raise DBEntityDoesNotExist(f"Account with username `{username}` does not exist!")
-
-        return result
-
-    async def read_account_by_email(self, email: str) -> UserAccount:
+    async def read_account_by_email(self, email: str) -> UserAccount | None:
         stmt = sqlalchemy.select(UserAccount).where(UserAccount.email == email)
         query = await self.async_session.execute(statement=stmt)
-        result = query.scalar()
-
-        if not result:
-            raise DBEntityDoesNotExist(f"Account with email `{email}` does not exist!")
-
-        return result
-
-    async def read_user_by_password_authentication(self, account_login: UserInLogin) -> UserAccount:
-        stmt = sqlalchemy.select(UserAccount).where(UserAccount.email == account_login.email)
-        query = await self.async_session.execute(statement=stmt)
-        db_account = query.scalar()
-
-        if not db_account:
-            raise DBEntityDoesNotExist("Wrong email!")
-
-        if not self._pwd_manager.verify_password(account_login.password, db_account.hashed_password):
-            raise PasswordDoesNotMatch("Password does not match!")
-
-        return db_account
+        return query.scalar()
 
     async def update_account_by_id(self, id: int, account_update: UserInUpdate) -> UserAccount:
         try:
-            # FIXED: Use exclude_unset=True
             new_account_data = account_update.model_dump(exclude_unset=True)
 
             select_stmt = sqlalchemy.select(UserAccount).where(UserAccount.id == id)
@@ -106,7 +77,7 @@ class UserCRUDRepository(BaseCRUDRepository):
                 update_stmt = update_stmt.values(email=new_account_data["email"])
 
             if "password" in new_account_data:
-                hashed_password = self._pwd_manager.hash_password(new_account_data["password"])
+                hashed_password = self.pwd_manager.hash_password(new_account_data["password"])
                 update_stmt = update_stmt.values(hashed_password=hashed_password)
 
             await self.async_session.execute(statement=update_stmt)
@@ -119,7 +90,7 @@ class UserCRUDRepository(BaseCRUDRepository):
             await self.async_session.rollback()
             raise DBEntityAlreadyExists("Username or email already taken") from e
 
-    async def delete_account_by_id(self, id: int) -> str:
+    async def delete_account_by_id(self, id: int) -> None:
         select_stmt = sqlalchemy.select(UserAccount).where(UserAccount.id == id)
         query = await self.async_session.execute(statement=select_stmt)
         delete_account = query.scalar()
@@ -131,8 +102,6 @@ class UserCRUDRepository(BaseCRUDRepository):
 
         await self.async_session.execute(statement=stmt)
         await self.async_session.commit()
-
-        return f"Account with id '{id}' is successfully deleted!"
 
     async def is_username_taken(self, username: str) -> bool:
         """Returns True if username is taken, False if available."""

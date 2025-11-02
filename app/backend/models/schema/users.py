@@ -22,17 +22,11 @@ class UserInLogin(BaseSchemaModel):
     password: str
 
 
-class UserLoggedInWithToken(BaseSchemaModel):
-    token: str
+class UserInResponse(BaseSchemaModel):
+    id: int
     username: str
     email: pydantic.EmailStr
     is_verified: bool
-    is_active: bool
-    is_logged_in: bool
     created_at: datetime.datetime
-    updated_at: datetime.datetime | None
-
-
-class UserInResponse(BaseSchemaModel):
-    id: int
-    authorized_account: UserLoggedInWithToken
+    role: str
+    hashed_password: str | None = None
