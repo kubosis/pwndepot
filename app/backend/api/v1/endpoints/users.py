@@ -16,7 +16,7 @@ import fastapi
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 
-from app.backend.api.v1.deps import CurrentAdminDep, CurrentUserOrAdminDep, UserRepositoryDep
+from app.backend.api.v1.deps import CurrentAdminDep, CurrentUserDep, CurrentUserOrAdminDep, UserRepositoryDep
 from app.backend.models.db.users import UserAccount
 from app.backend.models.schema.tokens import TokenResponse
 from app.backend.models.schema.users import *
@@ -137,3 +137,15 @@ async def delete_user(
             status_code=status.HTTP_400_BAD_REQUEST, detail="User with specified id does not exist"
         ) from None
     return {"message": f"User {user_id} deleted successfully"}
+
+
+@router.post("/logout", status_code=status.HTTP_200_OK)
+async def logout_user(
+    current_user: CurrentUserDep,
+):
+    """
+    Handles user logout.
+    This endpoint only confirms the user is authenticated.
+    The client is responsible for deleting the token.
+    """
+    return {"message": "Logout successful"}
