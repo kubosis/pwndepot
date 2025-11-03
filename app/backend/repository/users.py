@@ -1,11 +1,12 @@
 import typing
 
 import sqlalchemy
+from loguru import logger
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import functions as sqlalchemy_functions
 
-from app.backend.models.db.users import UserTable
+from app.backend.db.models import UserTable
 from app.backend.repository.base import BaseCRUDRepository
 from app.backend.schema.users import UserInCreate, UserInUpdate
 from app.backend.security.password import PasswordManager
@@ -27,10 +28,12 @@ class UserCRUDRepository(BaseCRUDRepository):
             self.async_session.add(instance=new_account)
             await self.async_session.commit()
             await self.async_session.refresh(instance=new_account)
+            logger.info(f"Account created: username={new_account.username}, email={new_account.email}")
 
             return new_account
         except IntegrityError:
             await self.async_session.rollback()
+            logger.error(f"Account creation failed due to IntegrityError for email={account_create.email}")
             return None
 
     async def read_accounts(self) -> typing.Sequence[UserTable]:
@@ -81,11 +84,13 @@ class UserCRUDRepository(BaseCRUDRepository):
             await self.async_session.execute(statement=update_stmt)
             await self.async_session.commit()
             await self.async_session.refresh(instance=update_account)
+            logger.info(f"Account updated: id={id}, fields={list(new_account_data.keys())}")
 
             return update_account
 
         except IntegrityError as e:
             await self.async_session.rollback()
+            logger.error(f"Account update failed due to IntegrityError for id={id}")
             raise DBEntityAlreadyExists("Username or email already taken") from e
 
     async def delete_account_by_id(self, id: int) -> None:

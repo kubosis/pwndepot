@@ -8,8 +8,8 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.backend.config.settings import get_settings
-from app.backend.models.db.session import AsyncSessionLocal
-from app.backend.models.models import RoleEnum, UserTable
+from app.backend.db.models import RoleEnum, UserTable
+from app.backend.db.session import AsyncSessionLocal
 from app.backend.repository.base import BaseCRUDRepository
 from app.backend.repository.users import UserCRUDRepository
 

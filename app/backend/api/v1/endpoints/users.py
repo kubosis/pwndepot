@@ -15,6 +15,7 @@ from typing import Annotated
 import fastapi
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
+from loguru import logger
 
 from app.backend.api.v1.deps import CurrentAdminDep, CurrentUserDep, CurrentUserOrAdminDep, UserRepositoryDep
 from app.backend.db.models import UserTable
@@ -26,7 +27,7 @@ from app.backend.utils.exceptions import DBEntityDoesNotExist
 router = fastapi.APIRouter(tags=["users"])
 
 
-def _construct_user_in_response(user: UserTable, include_password_hash: bool = False) -> UserInResponse:
+def _construct_user_in_response(user: UserTable) -> UserInResponse:
     user_in_response = UserInResponse(
         id=user.id,
         username=user.username,
@@ -34,7 +35,6 @@ def _construct_user_in_response(user: UserTable, include_password_hash: bool = F
         created_at=user.created_at,
         is_verified=user.is_email_verified,
         role=user.role,
-        hashed_password=user.hashed_password if include_password_hash else None,
     )
     return user_in_response
 
@@ -47,6 +47,10 @@ async def create_user(
     account_repo: UserRepositoryDep,
 ):
     db_user = await account_repo.create_account(user)
+    if db_user:
+        logger.info(f"New user registered: username={db_user.username}, email={db_user.email}")
+    else:
+        logger.error(f"User registration failed for email={user.email}")
     return _construct_user_in_response(db_user)
 
 
@@ -56,12 +60,12 @@ async def create_user(
 async def get_users(
     account_repo: UserRepositoryDep,
     current_admin: CurrentAdminDep,
-    include_password_hash: bool = False,
 ):
+    logger.info(f"Admin {current_admin.username} requested user list.")
     db_users = await account_repo.read_accounts()
     response_users: list[UserInResponse] = []
     for u in db_users:
-        response_users.append(_construct_user_in_response(u, include_password_hash))
+        response_users.append(_construct_user_in_response(u))
     return response_users
 
 
@@ -74,9 +78,11 @@ async def login_for_access_token(
     """
     # 1. Get the User from DB
     # the form data by default contains username, but we want to login with mail
+    login_mail = login_data.username
     db_user = await account_repo.read_account_by_email(login_data.username)
 
     if not db_user:
+        logger.warning(f"Failed login attempt for email={login_mail}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -89,12 +95,14 @@ async def login_for_access_token(
     )
 
     if not is_password_valid:
+        logger.warning(f"Failed login attempt for email={login_mail}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    logger.info(f"User email={db_user.email} logged in successfully.")
     # 3. Create the JWT
     token_data = {"sub": str(db_user.id)}
     access_token = create_jwt_access_token(data=token_data)
@@ -109,6 +117,7 @@ async def get_user_by_id(
     account_repo: UserRepositoryDep,
     current_user_or_admin: CurrentUserOrAdminDep,
 ):
+    logger.info(f"Profile accessed for user_id={user_id} by user={current_user_or_admin.username}")
     db_user = await account_repo.read_account_by_id(user_id)
     return _construct_user_in_response(db_user)
 
@@ -120,6 +129,10 @@ async def update_user(
     account_repo: UserRepositoryDep,
     current_user_or_admin: CurrentUserOrAdminDep,
 ):
+    logger.info(
+        f"User name={current_user_or_admin.username}, id={current_user_or_admin.id} "
+        f"requested update of User id={user_id}"
+    )
     db_user = await account_repo.update_account_by_id(user_id, user_update)
     return _construct_user_in_response(db_user)
 
@@ -132,7 +145,9 @@ async def delete_user(
 ):
     try:
         await account_repo.delete_account_by_id(user_id)
+        logger.info(f"User id={user_id} deleted by {current_admin.username}")
     except DBEntityDoesNotExist:
+        logger.warning("Delete request of non-existent user")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="User with specified id does not exist"
         ) from None
@@ -148,4 +163,5 @@ async def logout_user(
     This endpoint only confirms the user is authenticated.
     The client is responsible for deleting the token.
     """
-    return {"message": "Logout successful"}
+    logger.info(f"User {current_user.username} requested logout")
+    return {"message": f"Logout of {current_user.username} was successful"}

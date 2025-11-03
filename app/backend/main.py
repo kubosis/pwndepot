@@ -4,6 +4,7 @@ from fastapi.middleware import cors
 
 from app.backend.api.v1.router import api_router
 from app.backend.config.settings import BackendBaseSettings, get_settings
+from app.backend.logging_config import setup_logging
 
 
 def _create_fastapi_backend(app_settings: BackendBaseSettings) -> fastapi.FastAPI:
@@ -22,6 +23,7 @@ def _create_fastapi_backend(app_settings: BackendBaseSettings) -> fastapi.FastAP
 
 
 settings = get_settings()
+setup_logging()
 app = _create_fastapi_backend(settings)
 
 if __name__ == "__main__":

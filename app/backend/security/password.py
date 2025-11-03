@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 
+from loguru import logger
 from passlib.context import CryptContext
 
 from app.backend.config.settings import get_settings
@@ -35,4 +36,11 @@ class PasswordManager:
 
     def verify_password(self, raw_password: str, hashed_password: str) -> bool:
         peppered = self._apply_pepper(raw_password)
-        return self._hash_ctx.verify(peppered, hashed_password)
+        try:
+            result = self._hash_ctx.verify(peppered, hashed_password)
+            if not result:
+                logger.warning("Password verification failed for a user.")
+            return result
+        except Exception as e:
+            logger.error(f"Password verification error: {e!s}")
+            return False

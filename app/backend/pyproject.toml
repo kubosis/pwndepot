@@ -38,6 +38,7 @@ dependencies = [
     "typer>=0.20.0",
     "pyjwt>=2.10.1",
     "python-multipart>=0.0.20",
+    "loguru>=0.7.3",
 ]
 
 

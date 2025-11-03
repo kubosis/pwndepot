@@ -29,4 +29,3 @@ class UserInResponse(BaseSchemaModel):
     is_verified: bool
     created_at: datetime.datetime
     role: str
-    hashed_password: str | None = None
