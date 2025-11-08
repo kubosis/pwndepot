@@ -1,6 +1,7 @@
 // JoinTeam.jsx
 import React, { useState, useEffect } from "react";
 import { useSearchParams, Link } from "react-router-dom";
+import { hashPassword } from "../utils/passwordUtils";
 
 export default function JoinTeam() {
   const [searchParams] = useSearchParams();
@@ -38,7 +39,10 @@ export default function JoinTeam() {
     }
   }, [searchParams]);
 
-  const handleJoin = () => {
+  const handleJoin = async () => {
+
+    const hashedPassword = await hashPassword(enteredPassword);
+
     if (enteredPassword.length < 8) {
       setMessage("Password must be at least 8 characters.");
       return;
@@ -47,13 +51,15 @@ export default function JoinTeam() {
     // --- Backend note ---
     // POST /api/teams/join with { token, password }
     // Response: { success: true/false, message, teamName }
+    // Backend must compare server-side hash(hashPassword + serverSalt)
 
-    if (enteredPassword === teamPassword) {
+    if (hashedPassword === (await hashPassword(teamPassword))) {
       setMessage(`You have successfully joined ${teamName}!`);
     } else {
       setMessage("Incorrect password. Try again.");
     }
   };
+  
 
   const isSubmitDisabled = enteredPassword.trim().length < 8;
 
@@ -98,3 +104,6 @@ export default function JoinTeam() {
     </div>
   );
 }
+
+// --- Backend note ---
+// User can only join a team if he's not in the team

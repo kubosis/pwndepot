@@ -1,16 +1,15 @@
 // Register.jsx
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { evaluatePassword } from "../utils/passwordUtils";
+import { evaluatePassword, hashPassword } from "../utils/passwordUtils";
 
-  // Security note for backend:
-  // Password must meet the following rules before being accepted:
-  // - At least 12 characters
-  // - At least 1 uppercase letter
-  // - At least 1 number
-  // - At least 1 special character
-  // Backend should enforce these rules as well, not just frontend.
-
+// --- Backend security note ---
+// Password must meet the following rules before being accepted:
+// - At least 12 characters
+// - At least 1 uppercase letter
+// - At least 1 number
+// - At least 1 special character
+// Backend should enforce these rules as well, not just frontend.
 
 export default function Register() {
   const navigate = useNavigate();
@@ -22,17 +21,17 @@ export default function Register() {
     confirmPassword: "",
   });
 
-  // Backend must also validate that:
+  // --- Backend validation note ---
+  // Backend must also validate:
   // - Username is unique
   // - Email is unique and valid
-  // Frontend cannot guarantee this.
-
+  // - Role assignment is handled server-side (e.g., default "user")
+  // Frontend cannot be trusted to assign or protect roles.
 
   const [passwordStrength, setPasswordStrength] = useState(0);
   const [passwordMessage, setPasswordMessage] = useState("");
-  const [isPasswordValid, setIsPasswordValid] = useState(false); // tracks if password meets all requirements
-  const [doPasswordsMatch, setDoPasswordsMatch] = useState(false); // tracks if password and confirmPassword match
-
+  const [isPasswordValid, setIsPasswordValid] = useState(false);
+  const [doPasswordsMatch, setDoPasswordsMatch] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -42,12 +41,12 @@ export default function Register() {
     setFormData((prev) => {
       const updatedForm = { ...prev, [name]: value };
 
-      // Checking if passwords match
+      // Check if passwords match
       setDoPasswordsMatch(updatedForm.password === updatedForm.confirmPassword);
 
-      // Determining password strength
+      // Evaluate password strength dynamically
       if (name === "password") {
-        const result = evaluatePassword(value); // On password input change, evaluate password strength and update messages
+        const result = evaluatePassword(value);
         setPasswordMessage(result.message);
         setPasswordStrength(result.strength);
         setIsPasswordValid(result.isValid);
@@ -57,10 +56,7 @@ export default function Register() {
     });
   };
 
-// Frontend prevents submission if password is invalid or passwords don't match
-// Backend will still validate all fields and reject invalid/duplicate data
-
-  const handleSubmit = (e) => { 
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!isPasswordValid) {
@@ -75,24 +71,54 @@ export default function Register() {
       return;
     }
 
-    // Backend integration point:
-    // Replace this dummy logic with an API call to register a new user.
-    // Example: await api.registerUser(formData);
-    // Backend must also validate that:
-    // - Username is unique
-    // - Email is unique and valid
-    // Frontend cannot guarantee this.
+    const hashedPassword = await hashPassword(formData.password);
 
+    // --- Frontend-only demo: all new users are assigned role "user"
+    const demoUser = {
+      username: formData.username,
+      email: formData.email,
+      password: hashedPassword,
+      role: "user", // Frontend demo only – backend must assign this securely
+    };
+
+    // --- Backend note ---
+    // Backend should handle role assignment securely:
+    // 1. Ignore any "role" field sent from frontend.
+    // 2. Automatically assign "user" role for all new signups.
+    // 3. Only allow admins to promote roles via verified admin endpoints.
+    //
+    // Example secure backend route:
+    // POST /api/register
+    // {
+    //   "username": "...",
+    //   "email": "...",
+    //   "password": "hashedPassword"
+    // }
+    // -> Backend automatically sets role = "user"
+    //
+    // The backend should:
+    // - Validate input fields (email format, username uniqueness)
+    // - Hash password using bcrypt or Argon2 before saving
+    // - Store { username, email, passwordHash, role: "user" } in the database
+
+    // Example placeholder (uncomment for backend)
+    // await fetch("/api/register", {
+    //   method: "POST",
+    //   headers: { "Content-Type": "application/json" },
+    //   body: JSON.stringify({
+    //     username: formData.username,
+    //     email: formData.email,
+    //     password: hashedPassword,
+    //   }),
+    // });
 
     setErrorMessage("");
     setSuccessMessage("Registration successful!");
 
-    // Redirect after 1 second
+    // Redirect to login after success
     setTimeout(() => {
-      navigate("/login"); // redirect to login page
+      navigate("/login");
     }, 1000);
-
-    console.log(formData);
   };
 
   const getStrengthClass = () => {
@@ -108,9 +134,9 @@ export default function Register() {
     <div className="register-container">
       <div className="register-card">
         <h2>Sign Up</h2>
-        <form onSubmit={handleSubmit}> 
-          <input // These inputs are required; backend will also validate uniqueness and email format
-            type="text" 
+        <form onSubmit={handleSubmit}>
+          <input
+            type="text"
             name="username"
             placeholder="Username"
             value={formData.username}
@@ -141,7 +167,8 @@ export default function Register() {
             onChange={handleChange}
             required
           />
-          {/* Submit button is enabled only if password is valid and passwords match */}
+
+          {/* Submit button enabled only when passwords match and are strong */}
           <button
             type="submit"
             disabled={!isFormValid}
@@ -151,15 +178,11 @@ export default function Register() {
           </button>
         </form>
 
-        {/* Messages */} {/* Error/success messages fade in and disappear automatically on form updates */}
-        {errorMessage && (
-          <p className="fade-in error-text">{errorMessage}</p>
-        )}
-        {successMessage && (
-          <p className="fade-in success-text">{successMessage}</p>
-        )}
+        {/* Feedback messages */}
+        {errorMessage && <p className="fade-in error-text">{errorMessage}</p>}
+        {successMessage && <p className="fade-in success-text">{successMessage}</p>}
 
-        {/* Password strength visual indicator. Valid/invalid classes update dynamically as user types */}
+        {/* Password strength and requirements */}
         <div className="password-strength mt-2">
           <h3>Password Requirements</h3>
           <div className="strength-bar">
@@ -179,7 +202,13 @@ export default function Register() {
             <li className={/[0-9]/.test(formData.password) ? "valid" : "invalid"}>
               At least 1 number
             </li>
-            <li className={/[!@#$%^&*(),.?":{}|<>]/.test(formData.password) ? "valid" : "invalid"}>
+            <li
+              className={
+                /[!@#$%^&*(),.?":{}|<>]/.test(formData.password)
+                  ? "valid"
+                  : "invalid"
+              }
+            >
               At least 1 special character
             </li>
           </ul>
@@ -190,9 +219,16 @@ export default function Register() {
         </div>
 
         <p className="mt-3">
-          Already have an account? <Link to="/login" className="text-blue-400 underline">Login</Link>
+          Already have an account?{" "}
+          <Link to="/login" className="text-blue-400 underline">
+            Login
+          </Link>
         </p>
       </div>
     </div>
   );
 }
+
+// TODO
+// Add option to add MFA(Google Authenticator)
+// Verify the email of user

@@ -1,88 +1,100 @@
-// Login.jsx
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { hashPassword } from "../utils/passwordUtils";
+import { DEMO_MODE } from "../config/demo";
 
-// Small component for showing feedback messages
 function Feedback({ message, type }) {
   if (!message) return null;
   const className = type === "error" ? "error-text fade-in" : "success-text fade-in";
   return <p className={className}>{message}</p>;
 }
 
-export default function Login() {
+export default function Login({ setLoggedInUser }) {
   const navigate = useNavigate();
-
-  // Form state
   const [formData, setFormData] = useState({ email: "", password: "" });
-  const [loading, setLoading] = useState(false); // API call loading state
-
-  // Feedback messages
+  const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    // Trim spaces immediately for input sanitization
     setFormData((prev) => ({ ...prev, [name]: value.trimStart() }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     const email = formData.email.trim();
     const password = formData.password.trim();
 
     if (!email || !password) {
       setErrorMessage("Please fill out all fields.");
-      setSuccessMessage("");
       return;
     }
 
-    setLoading(true); // Disable submit button and show spinner
+    const hashedPassword = await hashPassword(password);
+    setLoading(true);
     setErrorMessage("");
     setSuccessMessage("");
 
-    // --- Backend Integration Notes ---
-    // TODO: Replace this dummy login logic with a real API call
-    // Example:
-    // fetch("/api/login", {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify({ email, password }),
-    // })
-    //   .then(res => res.json())
-    //   .then(data => {
-    //     setLoading(false);
-    //     if (data.success) {
-    //       navigate("/"); // redirect to home/dashboard
-    //     } else {
-    //       setErrorMessage(data.message || "Invalid credentials.");
-    //     }
-    //   })
-    //   .catch(() => {
-    //     setLoading(false);
-    //     setErrorMessage("Server error. Try again later.");
-    //   });
+    // ===== DEMO MODE =====
+    if (DEMO_MODE) {
+      setTimeout(() => {
+        if (email === "user@example.com" && password === "123456") {
+          const demoUser = {
+            username: "user1",
+            email,
+            role: "user",
+          };
+          localStorage.setItem("loggedInUser", JSON.stringify(demoUser));
+          setLoggedInUser(demoUser);
+          setSuccessMessage("Logged in successfully.");
+          setLoading(false);
+          setTimeout(() => navigate("/"), 800);
+        } else if (email === "admin@example.com") {
+          setErrorMessage("Access denied: Admins must log in via admin panel.");
+          setLoading(false);
+        } else {
+          setErrorMessage("Invalid email or password.");
+          setLoading(false);
+        }
+      }, 800);
+      return;
+    }
 
-    // Dummy frontend login logic (kept for testing)
-    setTimeout(() => {
-      if (email === "user@example.com" && password === "123456") {
-        setSuccessMessage("Logged in successfully!");
-        setErrorMessage("");
+    // ===== PRODUCTION MODE =====
+    try {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include", // ensures session cookie is sent
+        body: JSON.stringify({ email, password: hashedPassword }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setErrorMessage(data.message || "Invalid email or password.");
         setLoading(false);
-        setTimeout(() => navigate("/"), 1000);
-      } else {
-        setErrorMessage("Invalid email or password.");
-        setSuccessMessage("");
-        setLoading(false);
+        return;
       }
-    }, 800);
-  };
 
-  const handleForgotPassword = () => {
-    // --- Backend Integration Note ---
-    // Password reset is handled manually by the administrator.
-    setTimeout(() => navigate("/forgotpassword"), 200);
+      // Example backend response: { success: true, user: { username, role } }
+      setLoggedInUser(data.user);
+      setSuccessMessage("Logged in successfully!");
+      setLoading(false);
+
+      // MFA check if backend indicates it’s required
+      if (data.requiresMFA) {
+        navigate("/mfa-verify");
+      } else {
+        navigate("/");
+      }
+
+    } catch (err) {
+      console.error("Login failed:", err);
+      setErrorMessage("Server error. Please try again later.");
+      setLoading(false);
+    }
   };
 
   return (
@@ -111,17 +123,8 @@ export default function Login() {
           </button>
         </form>
 
-        {/* Feedback messages */}
         <Feedback message={errorMessage} type="error" />
         <Feedback message={successMessage} type="success" />
-
-        <button
-          type="button"
-          onClick={handleForgotPassword}
-          className="enabled-animation forgot-btn mt-3"
-        >
-          Forgot Password?
-        </button>
 
         <p className="mt-3 text-gray-400 text-sm">
           Don’t have an account?{" "}
@@ -133,3 +136,9 @@ export default function Login() {
     </div>
   );
 }
+
+// ===== TODO for backend integration =====
+// 1. Add MFA verification page (/mfa-verify) after successful login if backend returns requiresMFA=true.
+// 2. Backend must set secure session cookies (HttpOnly, Secure, SameSite=Lax).
+// 3. Backend must issue short-lived sessions and require re-auth on expiry.
+// 4. Never store credentials, tokens, or roles in localStorage when DEMO_MODE=false.

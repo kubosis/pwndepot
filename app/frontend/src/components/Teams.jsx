@@ -1,5 +1,6 @@
 // Teams.jsx
 import React, { useState } from "react";
+import { hashPassword } from "../utils/passwordUtils";
 
 export default function Teams() {
   const [teamName, setTeamName] = useState("");
@@ -8,7 +9,7 @@ export default function Teams() {
   const [message, setMessage] = useState("");
 
   // Handles team creation (frontend demo only)
-  const handleCreateTeam = () => {
+  const handleCreateTeam = async () => {
     if (!teamName || !teamPassword) {
       setMessage("Please enter both team name and password.");
       return;
@@ -18,14 +19,25 @@ export default function Teams() {
       return;
     }
 
+    const hashedPassword = await hashPassword(teamPassword);
+
+    // Example secure fetch
+    // await fetch("/api/teams/create", {
+    //   method: "POST",
+    //   headers: { "Content-Type": "application/json" },
+    //   body: JSON.stringify({ teamName, teamPassword: hashedPassword }),
+    // });
     // --- Backend note ---
     // Backend should provide endpoint: POST /api/teams/create
     // with { teamName, teamPassword }
     // Response: { inviteToken }
     // Backend must handle:
-    // 1. Password hashing
-    // 2. Token uniqueness
-    // 3. Persistence in database
+    // 1. Team name uniqueness (reject duplicate names)
+    // 2. Password hashing (store only hashed version)
+    // 3. Token uniqueness (generate unique invite tokens)
+    // 4. Persistence in database (save team and members)
+    // 5. Ensure user belongs to only one team and he cannot create the team if he's in one (frontend: must display the message that: "You already belong to a team")
+    // 6. Backend ensures roles: boss of the team and members
 
     // Generate a fake token for demo purposes
     const fakeToken = Math.random().toString(36).substring(2, 10); 

@@ -1,25 +1,29 @@
-// Navbar.jsx
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import logo from "../assets/logo.jpg";
 import "../index.css";
+import { DEMO_MODE } from "../config/demo"; 
 
-export default function Navbar({ ctfActive }) {
-  const [loggedInUser, setLoggedInUser] = useState(null);
+export default function Navbar({ ctfActive, loggedInUser, setLoggedInUser }) {
   const navigate = useNavigate();
 
-  useEffect(() => {
-    try {
-      const storedUser = JSON.parse(localStorage.getItem("loggedInUser"));
-      if (storedUser) setLoggedInUser(storedUser);
-    } catch (err) {
-      console.warn("Failed to parse loggedInUser from localStorage:", err);
+  const handleLogout = async () => {
+    if (DEMO_MODE) {
+      // Demo mode only - remove from localStorage
+      localStorage.removeItem("loggedInUser");
+    } else {
+      // Production mode - call backend logout endpoint
+      try {
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          credentials: "include",
+        });
+      } catch (err) {
+        console.warn("Logout request failed (possibly offline):", err);
+      }
     }
-  }, []);
 
-  const handleLogout = () => {
-    // TODO: Replace localStorage auth with backend API logout/session invalidation
-    localStorage.removeItem("loggedInUser");
+    // Always clear frontend state
     setLoggedInUser(null);
     navigate("/");
   };
@@ -35,32 +39,59 @@ export default function Navbar({ ctfActive }) {
             className="w-12 h-12 rounded-full object-cover transform transition duration-200 hover:scale-110 hover:shadow-lg"
           />
         </Link>
-        <span className="navbar-header ml-2 font-semibold text-white">ISEP CTF Platform</span>
+        <span className="navbar-header ml-2 font-semibold text-white">
+          ISEP CTF Platform
+        </span>
       </div>
 
       {/* Right: navigation buttons */}
       {ctfActive && (
         <div
           className="navbar-buttons flex items-center gap-3"
-          style={{ marginRight: "0.5rem" }} // moved to left a bit
+          style={{ marginRight: "0.5rem" }}
         >
           {!loggedInUser ? (
             <>
-              <Link to="/Register" className="fancy-btn">Register</Link>
-              <Link to="/Login" className="fancy-btn">Login</Link>
-              <Link to="/Teams" className="fancy-btn">Teams</Link>
-              <Link to="/Rankings" className="fancy-btn">Scoreboard</Link>
-              <Link to="/Contact" className="fancy-btn">Contact</Link>
+              <Link to="/Register" className="fancy-btn">
+                Register
+              </Link>
+              <Link to="/Login" className="fancy-btn">
+                Login
+              </Link>
+              <Link to="/Teams" className="fancy-btn">
+                Teams
+              </Link>
+              <Link to="/Rankings" className="fancy-btn">
+                Scoreboard
+              </Link>
+              <Link to="/Contact" className="fancy-btn">
+                Contact
+              </Link>
             </>
           ) : (
             <>
-              <Link to="/Teams" className="fancy-btn">Teams</Link>
-              <Link to="/Rankings" className="fancy-btn">Scoreboard</Link>
-              <Link to="/Contact" className="fancy-btn">Contact</Link>
-              <Link to={`/profile/${loggedInUser.username}`} className="fancy-btn">My Profile</Link>
+              <Link to="/Teams" className="fancy-btn">
+                Teams
+              </Link>
+              <Link to="/Rankings" className="fancy-btn">
+                Scoreboard
+              </Link>
+              <Link to="/Contact" className="fancy-btn">
+                Contact
+              </Link>
+              <Link
+                to={`/profile/${loggedInUser.username}`}
+                className="fancy-btn"
+              >
+                My Profile
+              </Link>
+              {/* Logout */}
               <Link
                 to="/"
-                onClick={(e) => { e.preventDefault(); handleLogout(); }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleLogout();
+                }}
                 className="fancy-btn logout-btn"
               >
                 Logout
@@ -74,20 +105,14 @@ export default function Navbar({ ctfActive }) {
 }
 
 /*
-==================== NOTES / TODOs ====================
+==================== Backend Integration Notes ====================
 
-1. Authentication:
-   - Currently uses localStorage for demonstration.
-   - In production, replace with backend API + JWT/session management.
-
-2. Active Link Highlight:
-   - wrap links in NavLink with `isActive` to highlight current page.
-
-3. UX:
-   - Logo hover animation and navbar transparency for modern feel.
-
-4. Error Handling:
-   - Wrapped localStorage parsing in try/catch.
+- Frontend uses localStorage only for demo UX.
+- In production:
+  1) On login, backend issues an HttpOnly, Secure, SameSite=Lax cookie.
+  2) Navbar (or App) should call /api/auth/status on load to confirm session.
+  3) handleLogout posts /api/auth/logout to invalidate that cookie.
+  4) localStorage is used only when DEMO_MODE=true.
 
 ========================================================
 */

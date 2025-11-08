@@ -1,6 +1,7 @@
-// AdminPage.jsx
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { hashPassword } from "../utils/passwordUtils";
+import { DEMO_MODE } from "../config/demo"; 
 
 export default function AdminPage({ setIsAdminLoggedIn }) {
   const initialTime = 7 * 24 * 3600; // 7 days in seconds
@@ -9,14 +10,13 @@ export default function AdminPage({ setIsAdminLoggedIn }) {
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [errorMessage, setErrorMessage] = useState("");
   const [isAdminLogged, setIsAdminLogged] = useState(false);
-  // Frontend-only login state; backend must verify credentials in real scenario
 
   // CTF timer states
   const [timeLeft, setTimeLeft] = useState(initialTime);
   const [ctfRunning, setCtfRunning] = useState(false);
   const [blast, setBlast] = useState(false);
 
-  // Users list
+  // Users list (demo data)
   const [users, setUsers] = useState([
     { id: 1, name: "User1", role: "user", status: "active" },
     { id: 2, name: "User2", role: "user", status: "active" },
@@ -24,30 +24,80 @@ export default function AdminPage({ setIsAdminLoggedIn }) {
     { id: 4, name: "Admin1", role: "admin", status: "active" },
   ]);
 
+  // Handle form change
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
-  const handleSubmit = (e) => {
+  // Handle admin login
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.email || !formData.password) {
       setErrorMessage("Please fill out all fields.");
       return;
     }
+
+    const hashedPassword = await hashPassword(formData.password);
+
+    if (!DEMO_MODE) {
+      // ===== PRODUCTION MODE (no localStorage) =====
+      try {
+        const res = await fetch("/api/admin/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: formData.email, password: hashedPassword }),
+          credentials: "include",
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          setIsAdminLogged(true);
+          setIsAdminLoggedIn(true);
+          setErrorMessage("");
+        } else {
+          setErrorMessage(data.message || "Invalid admin credentials!");
+        }
+      } catch (err) {
+        console.error("Login failed:", err);
+        setErrorMessage("Network error during login.");
+      }
+      return;
+    }
+
+    // ===== DEMO MODE (frontend-only logic) =====
     if (formData.email === "admin@example.com" && formData.password === "admin123") {
       setIsAdminLogged(true);
       setIsAdminLoggedIn(true);
+      localStorage.setItem("isAdminLoggedIn", "true"); // frontend-only persistence
       setErrorMessage("");
     } else {
       setErrorMessage("Invalid admin credentials!");
     }
   };
 
-  const suspendUser = (id) =>
-    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, status: "suspended" } : u)));
-  const removeSuspension = (id) =>
-    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, status: "active" } : u)));
-  const deleteUser = (id) => setUsers((prev) => prev.filter((u) => u.id !== id));
+  // Handle logout
+  const handleLogout = async () => {
+    if (DEMO_MODE) {
+      localStorage.removeItem("isAdminLoggedIn");
+    } else {
+      // Production mode — call backend logout endpoint
+      try {
+        await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+      } catch (err) {
+        console.warn("Logout request failed (possibly offline):", err);
+      }
+    }
 
-  // Decrement timer every second while CTF is running
+    setIsAdminLogged(false);
+    setIsAdminLoggedIn(false);
+  };
+
+  // Auto-login from localStorage (for demo only)
+  useEffect(() => {
+    if (DEMO_MODE && localStorage.getItem("isAdminLoggedIn") === "true") {
+      setIsAdminLogged(true);
+      setIsAdminLoggedIn(true);
+    }
+  }, [setIsAdminLoggedIn]);
+
+  // CTF timer logic
   useEffect(() => {
     if (!ctfRunning) return;
     if (timeLeft <= 0) {
@@ -58,7 +108,6 @@ export default function AdminPage({ setIsAdminLoggedIn }) {
     return () => clearInterval(timer);
   }, [ctfRunning, timeLeft]);
 
-  // Show nuclear blast animation when timer hits 0
   useEffect(() => {
     if (timeLeft === 0) {
       setBlast(true);
@@ -70,6 +119,7 @@ export default function AdminPage({ setIsAdminLoggedIn }) {
     }
   }, [timeLeft]);
 
+  // Helper functions for CTF clock
   const hours = Math.floor((timeLeft % (24 * 3600)) / 3600);
   const minutes = Math.floor((timeLeft % 3600) / 60);
   const seconds = timeLeft % 60;
@@ -88,6 +138,14 @@ export default function AdminPage({ setIsAdminLoggedIn }) {
       .padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
+  // Suspend / Remove / Delete user handlers
+  const suspendUser = (id) =>
+    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, status: "suspended" } : u)));
+  const removeSuspension = (id) =>
+    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, status: "active" } : u)));
+  const deleteUser = (id) => setUsers((prev) => prev.filter((u) => u.id !== id));
+
+  // Admin Login Screen
   if (!isAdminLogged) {
     return (
       <div className="admin-login-page">
@@ -119,9 +177,12 @@ export default function AdminPage({ setIsAdminLoggedIn }) {
     );
   }
 
+  // Admin Dashboard
   return (
     <div className="admin-panel">
-      <h1>🔥 ADMIN PANEL</h1>
+      <div className="admin-header">
+        <h1>🔥 ADMIN PANEL</h1>
+      </div>
 
       {/* CTF Timer controls */}
       <div className="ctf-controls">
@@ -132,33 +193,28 @@ export default function AdminPage({ setIsAdminLoggedIn }) {
 
             // --- Backend note ---
             // When starting/stopping CTF, send an API call to backend:
-            // POST /api/ctf-start  -> sets ctfActive = true, starts timer
-            // POST /api/ctf-stop   -> sets ctfActive = false, stops timer
-            // App.jsx should fetch /api/ctf-status periodically to update ctfActive globally
+            // POST /api/ctf-start -> sets ctfActive = true, starts timer
+            // POST /api/ctf-stop  -> sets ctfActive = false, stops timer
           }}
         >
           {ctfRunning ? "STOP CTF 💀" : "START CTF 💣"}
+        </button>
+        <button className="logout-btn nuclear-btn" onClick={handleLogout}>
+          Logout
         </button>
       </div>
 
       {(timeLeft > 0 || blast) && (
         <div className="ctf-clock">
           <div className="manual-clock">
-            <div
-              className="hand hour"
-              style={{ transform: `translate(-50%, -100%) rotate(${hourDeg}deg)` }}
-            />
-            <div
-              className="hand minute"
-              style={{ transform: `translate(-50%, -100%) rotate(${minDeg}deg)` }}
-            />
-            <div
-              className="hand second"
-              style={{ transform: `translate(-50%, -100%) rotate(${secDeg}deg)` }}
-            />
+            <div className="hand hour" style={{ transform: `translate(-50%, -100%) rotate(${hourDeg}deg)` }} />
+            <div className="hand minute" style={{ transform: `translate(-50%, -100%) rotate(${minDeg}deg)` }} />
+            <div className="hand second" style={{ transform: `translate(-50%, -100%) rotate(${secDeg}deg)` }} />
             <div className="center-dot" />
           </div>
-          <div className="digital-clock">The CTF will end in: {formatDigital(timeLeft)}</div>
+          <div className="digital-clock">
+            The CTF will end in: {formatDigital(timeLeft)}
+          </div>
         </div>
       )}
       {blast && <div className="nuclear-blast"></div>}

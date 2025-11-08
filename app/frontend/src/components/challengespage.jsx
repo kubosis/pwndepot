@@ -1,17 +1,15 @@
-// challengespage.jsx
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
+import { DEMO_MODE } from "../config/demo";
 
-// Mock Data
-// Teams
+// ==================== Mock Data (demo mode) ====================
 const teams = [
   { name: "CryptoMasters", users: ["alice", "bob"] },
   { name: "WebWizards", users: ["charlie", "dave"] },
 ];
 
-// Mock challenges
-const challengeData = {
+const mockChallenges = {
   Web: [
     {
       id: 1,
@@ -106,10 +104,9 @@ const challengeData = {
   ],
 };
 
-// ===== Challenge Card Component =====
+// ==================== Challenge Card ====================
 function ChallengeCard({ challenge, onClick, username }) {
-  // Use a Set for O(1) lookup when many users
-  const completedSet = new Set(challenge.completedBy.map(u => u.username));
+  const completedSet = new Set(challenge.completedBy.map((u) => u.username));
   const isCompleted = completedSet.has(username);
 
   return (
@@ -124,23 +121,26 @@ function ChallengeCard({ challenge, onClick, username }) {
   );
 }
 
-// ===== Challenge Modal Component =====
+// ==================== Challenge Modal ====================
 function ChallengeModal({ challenge, onClose, username }) {
   const [flag, setFlag] = useState("");
   const [flagFeedback, setFlagFeedback] = useState("");
-  const [flagStatus, setFlagStatus] = useState(""); // "success"/"error"/"info"
+  const [flagStatus, setFlagStatus] = useState(""); // "success" | "error"
   const [instanceLink, setInstanceLink] = useState("");
-  const [timer, setTimer] = useState(60 * 60); // 1 hour default
+  const [timer, setTimer] = useState(60 * 60); // 1 hour
   const [instanceRunning, setInstanceRunning] = useState(false);
   const [instanceFeedback, setInstanceFeedback] = useState("");
   const timerRef = useRef();
 
-  const userTeam = teams.find(t => t.users.includes(username));
+  const userTeam = teams.find((t) => t.users.includes(username));
 
-  // ===== Timer effect for running instance =====
+  // Timer effect
   useEffect(() => {
     if (instanceRunning) {
-      timerRef.current = setInterval(() => setTimer(prev => (prev > 0 ? prev - 1 : 0)), 1000);
+      timerRef.current = setInterval(
+        () => setTimer((prev) => (prev > 0 ? prev - 1 : 0)),
+        1000
+      );
     }
     return () => clearInterval(timerRef.current);
   }, [instanceRunning]);
@@ -148,10 +148,12 @@ function ChallengeModal({ challenge, onClose, username }) {
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+    return `${mins.toString().padStart(2, "0")}:${secs
+      .toString()
+      .padStart(2, "0")}`;
   };
 
-  // ===== Instance management =====
+  // Instance management
   const handleStartInstance = () => {
     if (!username) {
       setInstanceFeedback("You must be logged in to start an instance.");
@@ -161,7 +163,6 @@ function ChallengeModal({ challenge, onClose, username }) {
       setInstanceFeedback("You must be in a team to start an instance.");
       return;
     }
-    // Simulated instance creation
     const randomPort = Math.floor(3000 + Math.random() * 1000);
     setInstanceLink(`https://challenge-instance.com/${challenge.id}:${randomPort}`);
     setInstanceRunning(true);
@@ -185,7 +186,7 @@ function ChallengeModal({ challenge, onClose, username }) {
     setInstanceFeedback("Instance stopped.");
   };
 
-  // ===== Flag submission =====
+  // Flag submission
   const handleSubmitFlag = () => {
     if (!username) {
       setFlagFeedback("You must be logged in to submit a flag.");
@@ -197,9 +198,9 @@ function ChallengeModal({ challenge, onClose, username }) {
       setFlagStatus("error");
       return;
     }
-    // TODO: Move flag checking to backend for security
+
     if (flag === challenge.flag) {
-      if (!challenge.completedBy.some(u => u.username === username)) {
+      if (!challenge.completedBy.some((u) => u.username === username)) {
         challenge.completedBy.push({ username, points: challenge.points });
       }
       setFlagFeedback(`Correct! +${challenge.points} points`);
@@ -211,7 +212,6 @@ function ChallengeModal({ challenge, onClose, username }) {
     setFlag("");
   };
 
-  // Determine color class
   const instanceColorClass =
     instanceFeedback.includes("started") || instanceFeedback.includes("extended")
       ? "success"
@@ -221,8 +221,7 @@ function ChallengeModal({ challenge, onClose, username }) {
 
   return createPortal(
     <div className="challenge-modal-overlay" onClick={onClose}>
-      <div className="challenge-modal animate-popup" onClick={e => e.stopPropagation()}>
-        {/* Challenge Info */}
+      <div className="challenge-modal animate-popup" onClick={(e) => e.stopPropagation()}>
         <h2 className="gradient-text">{challenge.title}</h2>
         <p className="challenge-points"><b>Points:</b> {challenge.points}</p>
         <p className="challenge-description"><b>Description:</b> {challenge.description}</p>
@@ -231,7 +230,9 @@ function ChallengeModal({ challenge, onClose, username }) {
         {challenge.hints.length > 0 && (
           <div className="challenge-hints">
             <p><b>Hints:</b></p>
-            {challenge.hints.map((hint, idx) => <p key={idx} className="hint-text">{hint}</p>)}
+            {challenge.hints.map((hint, idx) => (
+              <p key={idx} className="hint-text">{hint}</p>
+            ))}
           </div>
         )}
 
@@ -255,7 +256,13 @@ function ChallengeModal({ challenge, onClose, username }) {
 
         {/* Flag Submission */}
         <div className="flag-container" style={{ marginTop: "12px" }}>
-          <input type="text" placeholder="Enter flag" value={flag} onChange={e => setFlag(e.target.value)} className="flag-input"/>
+          <input
+            type="text"
+            placeholder="Enter flag"
+            value={flag}
+            onChange={(e) => setFlag(e.target.value)}
+            className="flag-input"
+          />
           <button className="submit-flag gradient-btn" onClick={handleSubmitFlag}>Submit</button>
           {flagFeedback && <p className={`feedback-message ${flagStatus}`}>{flagFeedback}</p>}
         </div>
@@ -265,43 +272,96 @@ function ChallengeModal({ challenge, onClose, username }) {
           <h4>Completed by:</h4>
           {challenge.completedBy.length > 0 ? (
             <ul className="completed-users">
-              {challenge.completedBy.map(u => (
+              {challenge.completedBy.map((u) => (
                 <li key={u.username}>
-                  <Link to={`/profile/${u.username}`} className="username-link">{u.username}</Link> - {u.points} pts
+                  <Link to={`/profile/${u.username}`} className="username-link">
+                    {u.username}
+                  </Link>{" "}
+                  - {u.points} pts
                 </li>
               ))}
             </ul>
-          ) : <p>No one has completed this yet.</p>}
+          ) : (
+            <p>No one has completed this yet.</p>
+          )}
         </div>
 
         <button className="submit-flag gradient-btn" style={{ marginTop: "12px" }} onClick={onClose}>Close</button>
       </div>
-    </div>, document.body
+    </div>,
+    document.body
   );
 }
 
-// ===== Main Challenge Page =====
+// ==================== Main Challenge Page ====================
 export default function ChallengePage() {
   const [selectedChallenge, setSelectedChallenge] = useState(null);
-  const username = localStorage.getItem("username") || ""; // simulate login
+  const [username, setUsername] = useState("");
+  const [challenges, setChallenges] = useState({});
+
+  useEffect(() => {
+    if (DEMO_MODE) {
+      // ===== DEMO MODE =====
+      try {
+        const storedUser = JSON.parse(localStorage.getItem("loggedInUser"));
+        if (storedUser?.username) setUsername(storedUser.username);
+      } catch (err) {
+        console.warn("Failed to read loggedInUser from localStorage:", err);
+      }
+      setChallenges(mockChallenges);
+    } else {
+      // ===== PRODUCTION MODE =====
+      (async () => {
+        try {
+          // Get authenticated user, and also keep track if he has completed the challenge, he cannot submit completed challenge
+          const userRes = await fetch("/api/auth/status", {
+            method: "GET",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+          });
+          if (userRes.ok) {
+            const data = await userRes.json();
+            if (data?.user?.username) setUsername(data.user.username);
+          }
+
+          // Fetch real challenges
+          const challRes = await fetch("/api/challenges", {
+            method: "GET",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+          });
+          if (challRes.ok) {
+            const challData = await challRes.json();
+            setChallenges(challData);
+          }
+        } catch (err) {
+          console.error("Error fetching data:", err);
+        }
+      })();
+    }
+  }, []);
 
   return (
-    <div className="challenge-page"
-         style={{
-           backgroundImage: `url("https://www.isep.fr/app/uploads/2024/10/Bandeau-Pourquoi-Integrer-lIsep.jpg")`,
-           backgroundSize: "cover",
-           backgroundPosition: "center",
-           backgroundRepeat: "no-repeat",
-           position: "relative",
-           minHeight: "100vh"
-         }}>
+    <div
+      className="challenge-page"
+      style={{
+        backgroundImage:
+          'url("https://www.isep.fr/app/uploads/2024/10/Bandeau-Pourquoi-Integrer-lIsep.jpg")',
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        position: "relative",
+        minHeight: "100vh",
+      }}
+    >
       <div style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 0 }}></div>
+
       <div className="challenge-container">
-        {Object.entries(challengeData).map(([category, challenges]) => (
+        {Object.entries(challenges).map(([category, list]) => (
           <div key={category} className="challenge-section">
             <h2 className="challenge-category gradient-text">{category}</h2>
             <div className="challenge-grid">
-              {challenges.map(ch => (
+              {list.map((ch) => (
                 <ChallengeCard
                   key={ch.id}
                   challenge={ch}
@@ -314,13 +374,14 @@ export default function ChallengePage() {
         ))}
       </div>
 
-      {/* Modal for selected challenge */}
-      {selectedChallenge &&
+      {/* Modal */}
+      {selectedChallenge && (
         <ChallengeModal
           challenge={selectedChallenge}
           onClose={() => setSelectedChallenge(null)}
           username={username}
-        />}
+        />
+      )}
     </div>
   );
 }
