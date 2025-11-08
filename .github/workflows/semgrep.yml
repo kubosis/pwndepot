@@ -4,33 +4,36 @@ on:
   push:
     branches:
       - main          # Run on push to main branch
-      - devel         # and devel branch
+      - devel         # Run on push to devel branch
   pull_request:
     branches:
-      - main          # Run on PR targeting main
-      - devel         # or devel
+      - main          # Run on pull requests targeting main branch
+      - devel         # Run on pull requests targeting devel branch
 
 jobs:
   semgrep_scan:
-    runs-on: ubuntu-latest   # Use latest Ubuntu runner
+    runs-on: ubuntu-latest     # Use the latest Ubuntu runner for the job
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3  # Checkout repository code
+        uses: actions/checkout@v3   # Check out the repository code so it can be scanned
 
-      - name: Run Semgrep scan
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: "p/ci"           # Use Semgrep's built-in 'p/ci' ruleset (CI/CD)
+      - name: Install Semgrep CLI
+        run: pip install semgrep     # Install Semgrep CLI to run the scan
+
+      - name: Run Semgrep CLI scan
+        run: semgrep --config p/ci --sarif > semgrep-report.sarif  
+        # Run Semgrep with the 'p/ci' ruleset and output the SARIF report to a file
 
       - name: Upload Semgrep results as artifact
-        if: failure()              # Upload artifact only if Semgrep scan fails
-        uses: actions/upload-artifact@v4  # <-- frissítve v4-re
+        if: failure()                # Only upload the report if the scan fails
+        uses: actions/upload-artifact@v4
         with:
-          name: semgrep-report     # Artifact name in workflow UI
-          path: semgrep-report.sarif  # Path to the report file
+          name: semgrep-report       # Name of the artifact in the workflow UI
+          path: semgrep-report.sarif # Path to the SARIF report file
 
       - name: Upload SARIF to GitHub code scanning
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: semgrep-report.sarif  # Always upload SARIF report for GitHub UI
+          sarif_file: semgrep-report.sarif  
+          # Upload the SARIF report so it appears in GitHub's Security tab
