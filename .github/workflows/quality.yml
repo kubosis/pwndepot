@@ -26,7 +26,7 @@ jobs:
           pip install ruff
 
       - name: Run Ruff
-        run: ruff check app/backend
+        run: ruff check app/backend --config app/backend/ruff.toml
 
   lint-frontend:
     name: Lint Frontend
