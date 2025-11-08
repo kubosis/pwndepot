@@ -3,35 +3,38 @@ name: Semgrep Security Scan  # The name of the GitHub Actions workflow
 on:
   push:
     branches:
-      - main          # Run the workflow on push events to the main branch
-      - devel         # and also on push events to the devel branch
+      - main          # Run on push to main branch
+      - devel         # Run on push to devel branch
   pull_request:
     branches:
-      - main          # Also run the workflow when a pull request targets main
-      - devel         # or when a pull request targets devel
+      - main          # Run on pull request targeting main
+      - devel         # Run on pull request targeting devel
 
 jobs:
   semgrep_scan:
-    runs-on: ubuntu-latest   # Use the latest Ubuntu VM to run the job
+    runs-on: ubuntu-latest   # Use latest Ubuntu runner
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3  # Check out the repo code so the workflow can access it
+        uses: actions/checkout@v3  # Checkout the repo code
 
       - name: Run Semgrep scan
         uses: returntocorp/semgrep-action@v1
         with:
-          config: "p/ci"           # Use Semgrep's built-in 'p/ci' ruleset (for CI/CD)
+          config: "p/ci"           # Use Semgrep's built-in ruleset for CI
+
+      - name: Generate SARIF report
+        # This step explicitly exports SARIF if Semgrep action doesn't do it automatically
+        run: semgrep --config p/ci --sarif > semgrep-report.sarif
 
       - name: Upload Semgrep results as artifact
-        if: failure()              # Only upload the scan report if the Semgrep scan fails
+        if: failure()              # Upload artifact only if Semgrep failed
         uses: actions/upload-artifact@v4
         with:
-          name: semgrep-report     # Name of the artifact in the workflow UI
-          path: semgrep-report.sarif  # The file path of the scan report to upload
-          
-      - name: Upload SARIF to GitHub code scanning
-        uses: github/codeql-action/upload-sarif@v2
-        with:
+          name: semgrep-report     # Artifact name
+          path: semgrep-report.sarif  # SARIF file path
 
-          sarif_file: semgrep-report.sarif  # Upload the SARIF report to GitHub's code scanning feature
+      - name: Upload SARIF to GitHub code scanning
+        uses: github/codeql-action/upload-sarif@v3  # Updated to v3
+        with:
+          sarif_file: semgrep-report.sarif  # Upload SARIF to GitHub
