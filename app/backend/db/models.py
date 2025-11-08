@@ -59,6 +59,13 @@ class ChallengeTable(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    path: Mapped[str] = mapped_column(String(256), nullable=False, unique=True)
+    description: Mapped[str] = mapped_column(String(512))
+    hint: Mapped[str] = mapped_column(String(512))
+
+    # is the challenge just download
+    # or do we want to deploy it
+    is_download: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
     difficulty: Mapped[Enum] = mapped_column(
         Enum(DifficultyEnum, name="difficulty_enum", native_enum=False),
