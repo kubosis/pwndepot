@@ -1,6 +1,7 @@
 [![React Version](https://img.shields.io/badge/react-18.2.0-61dafb.svg?logo=react&logoColor=white)](https://reactjs.org/)
 [![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+![Code Quality](https://github.com/kubosis/project/actions/workflows/quality.yml/badge.svg)
 
  
  # Capture The Flag (CTF) Project

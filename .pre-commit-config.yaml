@@ -19,4 +19,4 @@ repos:
       - id: conventional-pre-commit
         name: semantic commit message check
         stages: [commit-msg]
-        args: [feat, fix, docs, style, refactor, test, chore, ci, build]
+        args: [feat, fix, docs, style, refactor, test, chore, ci, build, cicd]
