@@ -1,0 +1,22 @@
+repos:
+  # --- Ruff (lint + format) ---
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9  # use the latest tag available
+    hooks:
+      - id: ruff
+        name: ruff lint
+        args: [--fix, --exit-non-zero-on-fix, --config, app/backend/ruff.toml]
+        files: ^app/backend/
+      - id: ruff-format
+        name: ruff format
+        args: [--config, app/backend/ruff.toml]
+        files: ^app/backend/
+
+  # --- Commit message linting (semantic commit style) ---
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v2.3.0
+    hooks:
+      - id: conventional-pre-commit
+        name: semantic commit message check
+        stages: [commit-msg]
+        args: [feat, fix, docs, style, refactor, test, chore, ci, build, cicd]

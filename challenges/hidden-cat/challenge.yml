@@ -1,0 +1,6 @@
+name: "Hidden Cat"
+difficulty: "Easy"
+category: "Stego"
+points: 100
+author: "Vincze Balazs Ivan"
+description: "A seemingly normal cat image hides a flag inside the file. Inspect the file contents (especially the end) to recover the flag in the format flag{...}."

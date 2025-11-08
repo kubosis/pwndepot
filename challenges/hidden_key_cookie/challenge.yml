@@ -1,0 +1,6 @@
+name: "Hidden Key Cookie Forge",
+difficulty: "Hard",
+category: "Web",
+points: 400,
+author: "Shane Samuel PRADEEP",
+description: "Find secret in PNG metadata and forge session cookie to retrieve flag."
