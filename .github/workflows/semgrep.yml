@@ -25,7 +25,7 @@ jobs:
 
       - name: Upload Semgrep results as artifact
         if: failure()              # Only upload the scan report if the Semgrep scan fails
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: semgrep-report     # Name of the artifact in the workflow UI
           path: semgrep-report.sarif  # The file path of the scan report to upload
@@ -33,4 +33,5 @@ jobs:
       - name: Upload SARIF to GitHub code scanning
         uses: github/codeql-action/upload-sarif@v2
         with:
+
           sarif_file: semgrep-report.sarif  # Upload the SARIF report to GitHub's code scanning feature
