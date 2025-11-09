@@ -92,33 +92,6 @@ node admin-bot.js
 
 ---
 
-## Recommended `.gitignore`
-
-```
-# env / secrets
-.env
-.env.local
-
-# build artifacts / binaries
-storedxss
-*.out
-
-# node
-node_modules/
-npm-debug.log*
-
-# DB / runtime
-/data/
-*.db
-
-# OS / editor
-.DS_Store
-.vscode/
-.idea/
-```
-
----
-
 # View container logs
 
 ```
