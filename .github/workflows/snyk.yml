@@ -17,7 +17,7 @@ jobs:
 
       - name: Install Snyk CLI
         run: |
-          curl -sL https://snyk.io/install.sh | bash
+          npm install -g snyk
           snyk --version
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
