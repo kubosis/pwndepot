@@ -1,0 +1,45 @@
+name: Semgrep Security Scan  # The name of the GitHub Actions workflow
+
+on:
+  push:
+    branches:
+      - main          # Run on push to main branch
+      - devel         # Run on push to devel branch
+  pull_request:
+    branches:
+      - main          # Run on pull requests targeting main branch
+      - devel         # Run on pull requests targeting devel branch
+
+jobs:
+  semgrep_scan:
+    runs-on: ubuntu-latest     # Use the latest Ubuntu runner for the job
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3   # Check out the repository code so it can be scanned
+
+      - name: Set up Python and enable pip caching
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Semgrep CLI
+        run: pip install semgrep==1.93.0     # Install fixed version of Semgrep CLI to run the scan
+
+      - name: Run Semgrep CLI scan
+        run: semgrep --config p/ci --sarif --output semgrep-report.sarif  
+        # Run Semgrep with the 'p/ci' ruleset and output the SARIF report to a file
+
+      - name: Upload Semgrep results as artifact
+        if: failure()                # Only upload the report if the scan fails
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-report       # Name of the artifact in the workflow UI
+          path: semgrep-report.sarif # Path to the SARIF report file
+
+      - name: Upload SARIF to GitHub code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep-report.sarif  
+          # Upload the SARIF report so it appears in GitHub's Security tab

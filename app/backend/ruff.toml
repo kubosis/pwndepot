@@ -1,0 +1,37 @@
+# app/backend/ruff.toml
+
+# Target Python version
+target-version = "py310"
+
+# Enabled rules
+lint.select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # import sorting
+    "UP",  # pyupgrade
+    "B",   # bugbear
+    "C4",  # comprehensions
+    "SIM", # simplify
+    "RUF"  # Ruff-specific rules
+]
+
+lint.ignore = [
+    "E501", # line too long
+    "F405", # star imports
+    "B008", # call in argument defaults
+    "F403", # star imports
+    "RUF002", # dashes in docstring
+]
+
+# Auto-fix behavior
+fix = true
+
+line-length = 119
+indent-width = 4
+
+exclude = [
+    "__pycache__",
+    "migrations",
+    "venv",
+    ".venv",
+]

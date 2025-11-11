@@ -1,0 +1,6 @@
+name: "Base64 Secret Decode"
+difficulty: "Easy"
+category: "Crypto"
+points: 100
+author: "Vincze Balazs Ivan"
+description: "You are given a text file containing a Base64-encoded string. Decode it to retrieve the flag in the format flag{...}."
