@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { hashPassword } from "../utils/passwordUtils";
-import { DEMO_MODE } from "../config/demo"; 
+import { DEMO_MODE } from "../config/demo";
+import { API_BASE_URL } from "../config/api";
 
-export default function AdminPage({ setIsAdminLoggedIn }) {
+export default function AdminPage({ setIsAdminLoggedIn, authToken, setAuthToken }) {
   const initialTime = 7 * 24 * 3600; // 7 days in seconds
 
   // Admin login states
@@ -24,6 +24,35 @@ export default function AdminPage({ setIsAdminLoggedIn }) {
     { id: 4, name: "Admin1", role: "admin", status: "active" },
   ]);
 
+  // ====== FETCH THE USERS FROM THE BACKEND (only in prod mode) ======
+  const loadUsers = async (token) => {
+    if (DEMO_MODE) return; // in demo we still use local users
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/users/`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        console.error("Failed to load users");
+        return;
+      }
+
+      const data = await res.json();
+      const mapped = data.map((u) => ({
+        id: u.id,
+        name: u.username || u.email || `user-${u.id}`,
+        role: u.role || "user",
+        status: u.is_active === false ? "suspended" : "active",
+      }));
+      setUsers(mapped);
+    } catch (err) {
+      console.error("Error loading users:", err);
+    }
+  };
+
   // Handle form change
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
@@ -35,40 +64,55 @@ export default function AdminPage({ setIsAdminLoggedIn }) {
       return;
     }
 
-    const hashedPassword = await hashPassword(formData.password);
-
-    if (!DEMO_MODE) {
-      // ===== PRODUCTION MODE (no localStorage) =====
-      try {
-        const res = await fetch("/api/admin/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: formData.email, password: hashedPassword }),
-          credentials: "include",
-        });
-        const data = await res.json();
-        if (res.ok && data.success) {
-          setIsAdminLogged(true);
-          setIsAdminLoggedIn(true);
-          setErrorMessage("");
-        } else {
-          setErrorMessage(data.message || "Invalid admin credentials!");
-        }
-      } catch (err) {
-        console.error("Login failed:", err);
-        setErrorMessage("Network error during login.");
+    // DEMO MODE
+    if (DEMO_MODE) {
+      if (
+        formData.email === "admin@example.com" &&
+        formData.password === "admin123"
+      ) {
+        setIsAdminLogged(true);
+        setIsAdminLoggedIn(true);
+        localStorage.setItem("isAdminLoggedIn", "true");
+        setErrorMessage("");
+      } else {
+        setErrorMessage("Invalid admin credentials!");
       }
       return;
     }
 
-    // ===== DEMO MODE (frontend-only logic) =====
-    if (formData.email === "admin@example.com" && formData.password === "admin123") {
+    // ===== PRODUCTION MODE (backend) =====
+    try {
+      // we don't hash the password here, backend has it's own hashing logic
+      const body = new URLSearchParams();
+      body.append("username", formData.email); // backend treats "username" as email
+      body.append("password", formData.password);
+
+      const res = await fetch(
+        `${API_BASE_URL}/api/v1/users/login?admin=true`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErrorMessage(data.detail || "Invalid admin credentials!");
+        return;
+      }
+
+      const token = data.access_token;
+      setAuthToken(token);
       setIsAdminLogged(true);
       setIsAdminLoggedIn(true);
-      localStorage.setItem("isAdminLoggedIn", "true"); // frontend-only persistence
       setErrorMessage("");
-    } else {
-      setErrorMessage("Invalid admin credentials!");
+
+      // After a succesful login load the users
+      await loadUsers(token);
+    } catch (err) {
+      console.error("Login failed:", err);
+      setErrorMessage("Network error during login.");
     }
   };
 
@@ -76,15 +120,20 @@ export default function AdminPage({ setIsAdminLoggedIn }) {
   const handleLogout = async () => {
     if (DEMO_MODE) {
       localStorage.removeItem("isAdminLoggedIn");
-    } else {
-      // Production mode — call backend logout endpoint
+    } else if (authToken) {
       try {
-        await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+        await fetch(`${API_BASE_URL}/api/v1/users/logout`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        });
       } catch (err) {
         console.warn("Logout request failed (possibly offline):", err);
       }
     }
 
+    setAuthToken(null);
     setIsAdminLogged(false);
     setIsAdminLoggedIn(false);
   };
@@ -138,12 +187,38 @@ export default function AdminPage({ setIsAdminLoggedIn }) {
       .padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
-  // Suspend / Remove / Delete user handlers
+  // Suspend / Remove / Delete user handlers - backend still doesn't have this logic
   const suspendUser = (id) =>
     setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, status: "suspended" } : u)));
   const removeSuspension = (id) =>
     setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, status: "active" } : u)));
-  const deleteUser = (id) => setUsers((prev) => prev.filter((u) => u.id !== id));
+  // DELETE user - backend integration
+  const deleteUser = async (id) => {
+    if (DEMO_MODE) {
+      setUsers((prev) => prev.filter((u) => u.id !== id));
+      return;
+    }
+
+    if (!authToken) return;
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/users/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+
+      if (!res.ok) {
+        console.error("Failed to delete user");
+        return;
+      }
+
+      setUsers((prev) => prev.filter((u) => u.id !== id));
+    } catch (err) {
+      console.error("Delete user error:", err);
+    }
+  };
 
   // Admin Login Screen
   if (!isAdminLogged) {

@@ -2,6 +2,8 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { evaluatePassword, hashPassword } from "../utils/passwordUtils";
+import { DEMO_MODE } from "../config/demo";
+import { API_BASE_URL } from "../config/api";
 
 // --- Backend security note ---
 // Password must meet the following rules before being accepted:
@@ -57,69 +59,44 @@ export default function Register() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
 
-    if (!isPasswordValid) {
-      setErrorMessage("Password is not strong enough");
-      setSuccessMessage("");
+  if (!isPasswordValid || !doPasswordsMatch) return;
+
+  // ===== DEMO MODE =====
+  if (DEMO_MODE) {
+    setSuccessMessage("Demo registration done");
+    setTimeout(() => navigate("/login"), 1000);
+    return;
+  }
+
+  // ===== PRODUCTION MODE =====
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/users/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: formData.username,
+        email: formData.email,
+        password: formData.password, // backend hashes itself
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setErrorMessage(data.detail || "Registration failed");
       return;
     }
 
-    if (!doPasswordsMatch) {
-      setErrorMessage("Passwords do not match");
-      setSuccessMessage("");
-      return;
-    }
+    setSuccessMessage("Registration successful");
+    setTimeout(() => navigate("/login"), 1000);
+  } catch (err) {
+    console.error(err);
+    setErrorMessage("Server error");
+  }
+};
 
-    const hashedPassword = await hashPassword(formData.password);
-
-    // --- Frontend-only demo: all new users are assigned role "user"
-    const demoUser = {
-      username: formData.username,
-      email: formData.email,
-      password: hashedPassword,
-      role: "user", // Frontend demo only – backend must assign this securely
-    };
-
-    // --- Backend note ---
-    // Backend should handle role assignment securely:
-    // 1. Ignore any "role" field sent from frontend.
-    // 2. Automatically assign "user" role for all new signups.
-    // 3. Only allow admins to promote roles via verified admin endpoints.
-    //
-    // Example secure backend route:
-    // POST /api/register
-    // {
-    //   "username": "...",
-    //   "email": "...",
-    //   "password": "hashedPassword"
-    // }
-    // -> Backend automatically sets role = "user"
-    //
-    // The backend should:
-    // - Validate input fields (email format, username uniqueness)
-    // - Hash password using bcrypt or Argon2 before saving
-    // - Store { username, email, passwordHash, role: "user" } in the database
-
-    // Example placeholder (uncomment for backend)
-    // await fetch("/api/register", {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify({
-    //     username: formData.username,
-    //     email: formData.email,
-    //     password: hashedPassword,
-    //   }),
-    // });
-
-    setErrorMessage("");
-    setSuccessMessage("Registration successful!");
-
-    // Redirect to login after success
-    setTimeout(() => {
-      navigate("/login");
-    }, 1000);
-  };
 
   const getStrengthClass = () => {
     if (passwordStrength < 2) return "strength-weak";

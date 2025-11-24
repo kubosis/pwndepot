@@ -9,7 +9,6 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "esModuleInterop": true,
-    "types": ["vite/client"]
   },
   "include": ["src"]
 }
