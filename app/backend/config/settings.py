@@ -30,7 +30,7 @@ class BackendBaseSettings(pydantic_settings.BaseSettings):
 
     # CORS middleware settings
     ALLOWED_ORIGINS: list[str] = [
-        "http://localhost:3000",  # reactJS
+        "http://localhost:3000",
         "http://0.0.0.0:3000",
     ]
     ALLOWED_METHODS: list[str] = ["*"]

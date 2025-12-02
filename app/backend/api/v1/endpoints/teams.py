@@ -83,7 +83,7 @@ def get_my_team(
     raise NotImplementedError
 
 
-@router.get("", response_model=list[FullTeamInResponse], status=status.HTTP_200_OK)
+@router.get("", response_model=list[FullTeamInResponse], status_code=status.HTTP_200_OK)
 def get_all_teams(
     team_repo: TeamsRepositoryDep,
 ):
