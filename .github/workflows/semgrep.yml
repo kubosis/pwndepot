@@ -10,6 +10,10 @@ on:
       - main          # Run on pull requests targeting main branch
       - devel         # Run on pull requests targeting devel branch
 
+permissions:
+  contents: read
+  security-events: write   # needed for upload-sarif
+
 jobs:
   semgrep_scan:
     runs-on: ubuntu-latest     # Use the latest Ubuntu runner for the job
@@ -43,3 +47,4 @@ jobs:
         with:
           sarif_file: semgrep-report.sarif  
           # Upload the SARIF report so it appears in GitHub's Security tab
+
