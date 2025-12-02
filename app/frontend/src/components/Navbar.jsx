@@ -3,8 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import logo from "../assets/logo.jpg";
 import "../index.css";
 import { DEMO_MODE } from "../config/demo"; 
+import { API_BASE_URL } from "../config/api.jsx";
 
-export default function Navbar({ ctfActive, loggedInUser, setLoggedInUser }) {
+export default function Navbar({ ctfActive, loggedInUser, setLoggedInUser, authToken, setAuthToken}) {
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -14,16 +15,18 @@ export default function Navbar({ ctfActive, loggedInUser, setLoggedInUser }) {
     } else {
       // Production mode - call backend logout endpoint
       try {
-        await fetch("/api/auth/logout", {
-          method: "POST",
-          credentials: "include",
-        });
+      if (!DEMO_MODE && authToken) {
+      await fetch(`${API_BASE_URL}/api/v1/users/logout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+    }
       } catch (err) {
         console.warn("Logout request failed (possibly offline):", err);
       }
     }
 
-    // Always clear frontend state
+    setAuthToken(null);
     setLoggedInUser(null);
     navigate("/");
   };

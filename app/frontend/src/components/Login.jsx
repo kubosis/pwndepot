@@ -1,21 +1,27 @@
+// src/components/Login.jsx
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { hashPassword } from "../utils/passwordUtils";
 import { DEMO_MODE } from "../config/demo";
+import { API_BASE_URL } from "../config/api.jsx";
+import { parseJwt } from "../utils/jwt.jsx"; // must match named export
 
+// Small helper to show success / error messages
 function Feedback({ message, type }) {
   if (!message) return null;
-  const className = type === "error" ? "error-text fade-in" : "success-text fade-in";
+  const className =
+    type === "error" ? "error-text fade-in" : "success-text fade-in";
   return <p className={className}>{message}</p>;
 }
 
-export default function Login({ setLoggedInUser }) {
+export default function Login({ setLoggedInUser, setAuthToken }) {
   const navigate = useNavigate();
+
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
+  // Keep inputs controlled and trim only at the beginning
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value.trimStart() }));
@@ -23,6 +29,7 @@ export default function Login({ setLoggedInUser }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     const email = formData.email.trim();
     const password = formData.password.trim();
 
@@ -31,12 +38,13 @@ export default function Login({ setLoggedInUser }) {
       return;
     }
 
-    const hashedPassword = await hashPassword(password);
     setLoading(true);
     setErrorMessage("");
     setSuccessMessage("");
 
-    // ===== DEMO MODE =====
+    // ======================
+    // DEMO MODE (frontend-only)
+    // ======================
     if (DEMO_MODE) {
       setTimeout(() => {
         if (email === "user@example.com" && password === "123456") {
@@ -61,46 +69,132 @@ export default function Login({ setLoggedInUser }) {
       return;
     }
 
-    // ===== PRODUCTION MODE =====
+    // ======================
+    // PRODUCTION MODE (real backend)
+    // ======================
     try {
-      const res = await fetch("/api/login", {
+      // Backend expects application/x-www-form-urlencoded and OAuth2PasswordRequestForm
+      const body = new URLSearchParams();
+      body.append("username", email);        // backend treats "username" as login/email
+      body.append("password", password);     // backend hashes password itself
+      body.append("grant_type", "password"); // required by OAuth2PasswordRequestForm
+
+      const res = await fetch(`${API_BASE_URL}/api/v1/users/login`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include", // ensures session cookie is sent
-        body: JSON.stringify({ email, password: hashedPassword }),
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: body.toString(),
       });
 
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        setErrorMessage(data.message || "Invalid email or password.");
+      let data;
+      try {
+        data = await res.json();
+      } catch (e) {
+        console.error("Login: cannot parse JSON response", e);
+        setErrorMessage("Invalid response from server.");
         setLoading(false);
         return;
       }
 
-      // Example backend response: { success: true, user: { username, role } }
-      setLoggedInUser(data.user);
-      setSuccessMessage("Logged in successfully!");
-      setLoading(false);
-
-      // MFA check if backend indicates it’s required
-      if (data.requiresMFA) {
-        navigate("/mfa-verify");
-      } else {
-        navigate("/");
+      // Handle HTTP errors (401, 400, etc.)
+      if (!res.ok) {
+        console.error("Login failed:", data);
+        const detail =
+          typeof data.detail === "string"
+            ? data.detail
+            : Array.isArray(data.detail)
+            ? data.detail[0]?.msg || "Invalid email or password."
+            : "Invalid email or password.";
+        setErrorMessage(detail);
+        setLoading(false);
+        return;
       }
 
+      // Expected successful response: { access_token: "...", token_type: "bearer" }
+      const token = data.access_token;
+      if (!token) {
+        console.error("Login: no access token in response", data);
+        setErrorMessage("No access token returned from server.");
+        setLoading(false);
+        return;
+      }
+
+      // Store token in app state (parent component decides where to keep it)
+      if (typeof setAuthToken === "function") {
+        setAuthToken(token);
+      } else {
+        console.warn("setAuthToken is not a function - check props wiring");
+      }
+
+      // Decode JWT to get user id (sub)
+      const payload = parseJwt(token);
+      console.log("JWT payload:", payload);
+
+      if (!payload || !payload.sub) {
+        console.error("JWT payload missing 'sub':", payload);
+        setErrorMessage("Invalid token payload.");
+        setLoading(false);
+        return;
+      }
+
+      const userId = payload.sub;
+
+      // Fetch user profile from backend
+      const profileRes = await fetch(
+        `${API_BASE_URL}/api/v1/users/profile/${userId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (!profileRes.ok) {
+        const errBody = await profileRes.text();
+        console.error(
+          "Profile request failed:",
+          profileRes.status,
+          errBody
+        );
+        setErrorMessage("Failed to load user profile.");
+        setLoading(false);
+        return;
+      }
+
+      let user;
+      try {
+        user = await profileRes.json();
+      } catch (e) {
+        console.error("Profile: cannot parse JSON", e);
+        setErrorMessage("Invalid profile data from server.");
+        setLoading(false);
+        return;
+      }
+
+      console.log("Logged in user:", user);
+      if (typeof setLoggedInUser === "function") {
+        setLoggedInUser(user);
+      }
+
+      setSuccessMessage("Login success");
+      setLoading(false);
+      navigate("/");
     } catch (err) {
-      console.error("Login failed:", err);
-      setErrorMessage("Server error. Please try again later.");
+      // This is the path that currently sets "Server error"
+      console.error("Login unexpected error:", err);
+      // Show real error message during dev to see what exactly broke
+      setErrorMessage(err?.message || "Server error");
       setLoading(false);
     }
   };
 
+  // ==============
+  // RENDER
+  // ==============
   return (
     <div className="register-container">
       <div className="register-card">
         <h2>Login</h2>
+
         <form onSubmit={handleSubmit}>
           <input
             type="email"
@@ -110,6 +204,7 @@ export default function Login({ setLoggedInUser }) {
             onChange={handleChange}
             required
           />
+
           <input
             type="password"
             name="password"
@@ -118,7 +213,12 @@ export default function Login({ setLoggedInUser }) {
             onChange={handleChange}
             required
           />
-          <button type="submit" className="enabled-animation" disabled={loading}>
+
+          <button
+            type="submit"
+            className="enabled-animation"
+            disabled={loading}
+          >
             {loading ? "Logging in..." : "Login"}
           </button>
         </form>
@@ -136,9 +236,3 @@ export default function Login({ setLoggedInUser }) {
     </div>
   );
 }
-
-// ===== TODO for backend integration =====
-// 1. Add MFA verification page (/mfa-verify) after successful login if backend returns requiresMFA=true.
-// 2. Backend must set secure session cookies (HttpOnly, Secure, SameSite=Lax).
-// 3. Backend must issue short-lived sessions and require re-auth on expiry.
-// 4. Never store credentials, tokens, or roles in localStorage when DEMO_MODE=false.
