@@ -2,50 +2,50 @@
 import React, { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from "recharts";
+import { API_BASE_URL } from "../config/api.jsx";
 
-export default function Profile() {
+export default function Profile({ loggedinUser, authToken }) {
   const { username } = useParams();
   const [user, setUser] = useState(null); // Current user object
   const [challengeData, setChallengeData] = useState([]); // Challenge statistics for pie chart
 
   useEffect(() => {
-    // --- Backend Note ---
-    // Replace mockUsers with a real API call:
-    // fetch(`/api/users/${username}`)
-    //   .then(res => res.json())
-    //   .then(data => {
-    //      setUser(data.user);
-    //      setChallengeData(data.challenges);
-    //   });
+    // if there's no token we don't call the backend
+    if (!authToken) return;
 
-    const mockUsers = [
-      { username: "Alice", score: 120, team: "CryptoMasters" },
-      { username: "Bob", score: 80, team: "CryptoMasters" },
-      { username: "Charlie", score: 95, team: "WebWizards" },
-      { username: "Dave", score: 60, team: null }, // Example: user without a team
-    ];
+    const loadProfile = async () => {
+      try {
+        const res = await fetch(
+          `${API_BASE_URL}/api/v1/users/profile/${loggedinUser?.id}`,
+          {
+            headers: {
+              Authorization: `Bearer ${authToken}`,
+            },
+          }
+        );
 
-    // Find the user matching the username in URL
-    const foundUser = mockUsers.find(
-      (u) => u.username.toLowerCase() === username.toLowerCase()
-    );
+        if (!res.ok) {
+          setUser(null);
+          setChallengeData([]);
+          return;
+        }
 
-    if (foundUser) {
-      setUser(foundUser);
+        const data = await res.json();
 
-      // Mock challenge data for demonstration
-      setChallengeData(foundUser.username === "Dave" ? [] : [
-        { name: "Crypto", value: 4, color: "#22c55e" },
-        { name: "Web", value: 3, color: "#facc15" },
-        { name: "Pwn", value: 2, color: "#ef4444" },
-        { name: "Forensics", value: 1, color: "#3b82f6" },
-      ]);
-    } else {
-      // User not found: clear state
-      setUser(null);
-      setChallengeData([]);
-    }
-  }, [username]);
+        // backend user
+        setUser(data);
+
+        // backend doesnt yet return challenge stats, temporarily empty
+        setChallengeData([]);
+      } catch (err) {
+        console.error("Profile load error:", err);
+        setUser(null);
+        setChallengeData([]);
+      }
+    };
+
+    loadProfile();
+  }, [authToken, loggedinUser]);
 
   if (!user) {
     // Render "User not found" page

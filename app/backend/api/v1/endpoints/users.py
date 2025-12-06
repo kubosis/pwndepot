@@ -47,10 +47,11 @@ async def create_user(
     account_repo: UserRepositoryDep,
 ):
     db_user = await account_repo.create_account(user)
-    if db_user:
+    if db_user is not None:
         logger.info(f"New user registered: username={db_user.username}, email={db_user.email}")
     else:
         logger.error(f"User registration failed for email={user.email}")
+        raise HTTPException(status.HTTP_409_CONFLICT, "User with this email already exists.")
     return _construct_user_in_response(db_user)
 
 
@@ -149,7 +150,7 @@ async def update_user(
 async def delete_user(
     user_id: int,
     account_repo: UserRepositoryDep,
-    current_admin: CurrentAdminDep,
+    current_admin: CurrentUserOrAdminDep,
 ):
     try:
         await account_repo.delete_account_by_id(user_id)

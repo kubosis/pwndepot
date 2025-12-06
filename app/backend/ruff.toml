@@ -21,6 +21,7 @@ lint.ignore = [
     "B008", # call in argument defaults
     "F403", # star imports
     "RUF002", # dashes in docstring
+    "RUF003", #
 ]
 
 # Auto-fix behavior

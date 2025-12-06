@@ -182,6 +182,12 @@ chroma_db/
 
 *.db
 
+
+# Ensure .env is ignored
+if (-not (Select-String -Path .gitignore -Pattern '^\.env' -Quiet)) {
+  Add-Content -Path .gitignore -Value "`n.env"
+}
+
 app/backend/.env
 
 # backend test user

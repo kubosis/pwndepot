@@ -1,0 +1,23 @@
+# Ignore git files
+
+.git
+.gitignore
+
+# Ignore local dependencies and environments anywhere in the project
+
+**/node_modules
+**/venv
+**/env
+
+# Ignore secrets
+
+.env
+**/.env
+
+# Python cache files
+
+**/pycache
+**/.pyc
+**/.pyo
+**/*.pyd
+.Python

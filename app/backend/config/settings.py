@@ -18,7 +18,9 @@ class BackendBaseSettings(pydantic_settings.BaseSettings):
     ENV: str = decouple.config("ENV", default="dev", cast=str)  # type: ignore
     DEBUG: bool = ENV == "dev"
 
-    SQLALCHEMY_DATABASE_URL: str = decouple.config("SQLALCHEMY_DATABASE_URL", cast=str)
+    SQLALCHEMY_DATABASE_URL: str = decouple.config("SQLALCHEMY_DATABASE_URL", cast=str)  # type: ignore
+
+    RATE_LIMIT_PER_MINUTE: int = decouple.config("RATE_LIMIT_PER_MINUTE", cast=int)  # type: ignore
 
     # Server settings
     SERVER_HOST: str = decouple.config("SERVER_HOST", cast=str)  # type: ignore
@@ -28,11 +30,14 @@ class BackendBaseSettings(pydantic_settings.BaseSettings):
 
     # CORS middleware settings
     ALLOWED_ORIGINS: list[str] = [
-        "http://localhost:3000",  # reactJS
+        "http://localhost:3000",
         "http://0.0.0.0:3000",
+        "http://127.0.0.1:3000",
     ]
+
     ALLOWED_METHODS: list[str] = ["*"]
     ALLOWED_HEADERS: list[str] = ["*"]
+    IS_ALLOWED_CREDENTIALS: bool = True
 
     LOGGING_LEVEL: int = logging.INFO
     LOGGERS: tuple[str, str] = ("uvicorn.asgi", "uvicorn.access")
@@ -48,7 +53,7 @@ class BackendBaseSettings(pydantic_settings.BaseSettings):
 
     JWT_ALGORITHM: str = decouple.config("JWT_ALGORITHM", cast=str)  # type: ignore
     SECRET_KEY: str = decouple.config("SECRET_KEY", cast=str)  # type: ignore
-    HASHING_PEPPER: str = decouple.config("HASHING_PEPPER", cast=str)  # type: ignore
+    HASHING_PEPPER: str | None = decouple.config("HASHING_PEPPER", cast=str, default=None)  # type: ignore
 
     API_V1_STR: str = API_PREFIX
 
