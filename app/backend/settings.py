@@ -1,6 +1,7 @@
 import decouple
 import pydantic_settings
 
+
 class BackendBaseSettings(pydantic_settings.BaseSettings):
     # ...
     FRONTEND_URL: str = decouple.config(

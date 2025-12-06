@@ -35,10 +35,10 @@ def _create_fastapi_backend(app_settings: BackendBaseSettings) -> fastapi.FastAP
 
     backend_app.add_middleware(
         CORSMiddleware,
-        allow_origins=origins,       # allowed frontend origins
-        allow_credentials=False,     # no cookies; we send Bearer tokens in headers
-        allow_methods=["*"],         # allow all HTTP methods in dev
-        allow_headers=["*"],         # allow all headers in dev
+        allow_origins=origins,  # allowed frontend origins
+        allow_credentials=False,  # no cookies; we send Bearer tokens in headers
+        allow_methods=["*"],  # allow all HTTP methods in dev
+        allow_headers=["*"],  # allow all headers in dev
     )
 
     # --- Rate limiting for all endpoints ---
