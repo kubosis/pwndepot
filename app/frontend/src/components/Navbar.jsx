@@ -5,7 +5,7 @@ import "../index.css";
 import { DEMO_MODE } from "../config/demo"; 
 import { API_BASE_URL } from "../config/api.jsx";
 
-export default function Navbar({ ctfActive, loggedInUser, setLoggedInUser, authToken, setAuthToken}) {
+export default function Navbar({ ctfActive, loggedInUser, setLoggedInUser}) {
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -23,7 +23,6 @@ export default function Navbar({ ctfActive, loggedInUser, setLoggedInUser, authT
   }
 
   setLoggedInUser(null);
-  setAuthToken(null);
   navigate("/");
 };
 
