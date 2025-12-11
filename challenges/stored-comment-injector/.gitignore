@@ -1,0 +1,20 @@
+# runtime / data
+/data/
+*.db
+*.sqlite
+*.log
+
+# node / go deps
+node_modules/
+vendor/
+
+# env files
+.env
+.env.local
+.env.*.local
+
+# editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
