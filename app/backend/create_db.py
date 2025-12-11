@@ -6,6 +6,7 @@ from app.backend.config.settings import get_settings
 
 # Import Base and ALL models so SQLAlchemy knows them
 from app.backend.db.base import Base
+from app.backend.db import models
 
 
 async def init_db():
