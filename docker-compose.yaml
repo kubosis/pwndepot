@@ -9,7 +9,7 @@ services:
     env_file:
       - ./app/backend/.env
     ports:
-      - "8000:8844"
+      - "8000:8000"
     volumes:
       - ./app/backend:/project/app/backend
     restart: unless-stopped
@@ -20,7 +20,7 @@ services:
       dockerfile: app/frontend/Dockerfile
     container_name: frontend_app
     ports:
-      - "3000:5173"
+      - "5173:5173"
     volumes:
       # Mount source for hot-reloading
       - ./app/frontend:/project/app/frontend

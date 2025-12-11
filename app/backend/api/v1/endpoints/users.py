@@ -11,37 +11,51 @@ Prefix: /api/v1/users
 """
 
 from typing import Annotated
+from datetime import timedelta, datetime, timezone
+from app.backend.limiter import limiter
+
 
 import fastapi
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.responses import JSONResponse
 from loguru import logger
 
-from app.backend.api.v1.deps import CurrentAdminDep, CurrentUserDep, CurrentUserOrAdminDep, UserRepositoryDep
+from app.backend.api.v1.deps import (
+    CurrentAdminDep,
+    CurrentUserDep,
+    TeamsRepositoryDep,
+    UserRepositoryDep,
+)
 from app.backend.db.models import RoleEnum, UserTable
-from app.backend.schema.tokens import TokenResponse
-from app.backend.schema.users import *
+from app.backend.schema.users import UserInCreate, UserInUpdate, UserInResponse
 from app.backend.security.tokens import create_jwt_access_token
 from app.backend.utils.exceptions import DBEntityDoesNotExist
+import app.backend.schema.users as schema_users
+from app.backend.schema.users import AdminPasswordChange
+from app.backend.config.settings import get_settings
 
 router = fastapi.APIRouter(tags=["users"])
+settings = get_settings()
 
 
-def _construct_user_in_response(user: UserTable) -> UserInResponse:
-    user_in_response = UserInResponse(
+
+def _construct_user_in_response(user: UserTable,*,team_id: int | None = None,team_name: str | None = None,) -> UserInResponse:
+    return UserInResponse(
         id=user.id,
         username=user.username,
-        email=user.email,
+        role=user.role,
         created_at=user.created_at,
         is_verified=user.is_email_verified,
-        role=user.role,
+        team_id=team_id,
+        team_name=team_name,
     )
-    return user_in_response
 
 
-# POST /api/v1/users/register
-# unauthorized access
-@router.post("/register", response_model=UserInResponse, status_code=status.HTTP_201_CREATED)
+# -----------------------------
+# SECURE REGISTRATION
+# -----------------------------
+@router.post("/register", status_code=status.HTTP_201_CREATED)
 async def create_user(
     user: UserInCreate,
     account_repo: UserRepositoryDep,
@@ -55,8 +69,9 @@ async def create_user(
     return _construct_user_in_response(db_user)
 
 
-# GET /api/v1/users
-# access needs to be authorized and user needs to be admin
+# -----------------------------
+# ADMIN: GET ALL USERS
+# -----------------------------
 @router.get("/", response_model=list[UserInResponse], status_code=status.HTTP_200_OK)
 async def get_users(
     account_repo: UserRepositoryDep,
@@ -70,87 +85,159 @@ async def get_users(
     return response_users
 
 
-@router.post("/login", response_model=TokenResponse, status_code=status.HTTP_200_OK)
+# -----------------------------
+# SECURE LOGIN USING HTTPONLY COOKIE
+# -----------------------------
+@router.post("/login", status_code=status.HTTP_200_OK)
+@limiter.limit("5/minute")
 async def login_for_access_token(
-    login_data: Annotated[OAuth2PasswordRequestForm, Depends()], account_repo: UserRepositoryDep, admin: bool = False
+    request: Request,
+    login_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    account_repo: UserRepositoryDep,
+    admin: bool = False,
 ):
-    """
-    Handles user login and returns a JWT.
-    """
     # 1. Get the User from DB
     # the form data by default contains username, but we want to login with mail
-    login_mail = login_data.username
-    db_user = await account_repo.read_account_by_email(login_data.username)
+    login_email = login_data.username
+    db_user = await account_repo.read_account_by_email(login_email)
 
     if not db_user:
-        logger.warning(f"Failed login attempt for email={login_mail}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        logger.warning(f"Failed login attempt for email={login_email}")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 
     if admin and db_user.role != RoleEnum.ADMIN:
-        logger.warning(f"User {db_user.username} tried to login to admin panel")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not sufficient rights",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        logger.warning(f"Unauthorized admin login attempt by {db_user.username}")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Not sufficient rights")
+    # 2. Verify Password
+    if not account_repo.pwd_manager.verify_password(
+        login_data.password, db_user.hashed_password
+    ):
+        logger.warning(f"Failed login attempt for email={login_email}")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 
-    # 2. Verify the password
-    is_password_valid = account_repo.pwd_manager.verify_password(
-        raw_password=login_data.password, hashed_password=db_user.hashed_password
-    )
+    logger.info(f"User {db_user.email} logged in successfully.")
 
-    if not is_password_valid:
-        logger.warning(f"Failed login attempt for email={login_mail}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    logger.info(f"User email={db_user.email} logged in successfully.")
-    # 3. Create the JWT
+    # Create JWT
     token_data = {"sub": str(db_user.id)}
     access_token = create_jwt_access_token(data=token_data)
 
-    # 4. Return the token
-    return TokenResponse(access_token=access_token, token_type="bearer")
+    # Cookie expiration
+    expiry_date = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+    )
+
+    cookie_domain = settings.COOKIE_DOMAIN
+
+    response = JSONResponse({"message": "Login successful"})
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=settings.COOKIE_HTTPONLY,
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE,
+        expires=expiry_date,
+        path="/",
+        domain=cookie_domain,
+    )
+
+    return response
 
 
-@router.get("/profile/{user_id}", response_model=UserInResponse, status_code=status.HTTP_200_OK)
-async def get_user_by_id(
-    user_id: int,
+# -----------------------------
+# GET USER PROFILE BY USERNAME, not user ID because it's more friendly
+# -----------------------------
+@router.get("/profile/{username}", response_model=UserInResponse)
+async def get_user_profile(
+    username: str,
     account_repo: UserRepositoryDep,
-    current_user_or_admin: CurrentUserOrAdminDep,
+    team_repo: TeamsRepositoryDep,
 ):
-    logger.info(f"Profile accessed for user_id={user_id} by user={current_user_or_admin.username}")
-    db_user = await account_repo.read_account_by_id(user_id)
-    return _construct_user_in_response(db_user)
+    user = await account_repo.read_account_by_username(username)
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    team = await team_repo.get_team_for_user(user.id)
+
+    return _construct_user_in_response(
+        user,
+        team_id=team.id if team else None,
+        team_name=team.name if team else None,
+    )
 
 
-@router.put("/update/{user_id}", response_model=UserInResponse, status_code=status.HTTP_200_OK)
+
+# -----------------------------
+# CURRENT AUTHENTICATED USER
+# -----------------------------
+@router.get("/me", response_model=UserInResponse)
+async def get_me(current_user: CurrentUserDep, team_repo: TeamsRepositoryDep):
+    team = await team_repo.get_team_for_user(current_user.id)
+
+    return _construct_user_in_response(
+        current_user,
+        team_id=team.id if team else None,
+        team_name=team.name if team else None,
+    )
+
+
+
+# -----------------------------
+# UPDATE USER
+# -----------------------------
+@router.put("/update/{user_id}", response_model=UserInResponse)
 async def update_user(
     user_id: int,
     user_update: UserInUpdate,
     account_repo: UserRepositoryDep,
-    current_user_or_admin: CurrentUserOrAdminDep,
+    current_admin: CurrentAdminDep,
 ):
-    logger.info(
-        f"User name={current_user_or_admin.username}, id={current_user_or_admin.id} "
-        f"requested update of User id={user_id}"
+    if current_admin.id == user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Admins cannot modify their own account via this endpoint"
+        )
+
+    updated = await account_repo.update_account_by_id(user_id, user_update)
+
+    logger.warning(
+        f"ADMIN ACTION: {current_admin.username} updated user_id={user_id}"
     )
-    db_user = await account_repo.update_account_by_id(user_id, user_update)
-    return _construct_user_in_response(db_user)
 
+    return _construct_user_in_response(updated)
 
-@router.delete("/{user_id}", response_model=dict, status_code=status.HTTP_200_OK)
+# -----------------------------
+# UPDATE PASSWORD (ADMIN)
+# -----------------------------
+@router.put("/{user_id}/password",status_code=status.HTTP_204_NO_CONTENT)
+async def admin_change_user_password(
+    user_id: int,
+    payload: AdminPasswordChange,
+    account_repo: UserRepositoryDep,
+    current_admin: CurrentAdminDep,
+):
+    if current_admin.id == user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Admins cannot change their own password via this endpoint",
+        )
+
+    await account_repo.change_password_by_admin(
+        user_id=user_id,
+        new_password=payload.new_password,
+    )
+
+    logger.warning(
+        f"ADMIN ACTION: {current_admin.username} changed password for user_id={user_id}"
+    )
+
+# -----------------------------
+# DELETE USER (ADMIN)
+# -----------------------------
+@router.delete("/{user_id}", response_model=dict)
 async def delete_user(
     user_id: int,
     account_repo: UserRepositoryDep,
-    current_admin: CurrentUserOrAdminDep,
+    current_admin: CurrentAdminDep,
 ):
     try:
         await account_repo.delete_account_by_id(user_id)
@@ -163,14 +250,17 @@ async def delete_user(
     return {"message": f"User {user_id} deleted successfully"}
 
 
+# -----------------------------
+# LOGOUT — CLEAR COOKIE
+# -----------------------------
 @router.post("/logout", status_code=status.HTTP_200_OK)
-async def logout_user(
-    current_user: CurrentUserDep,
-):
-    """
-    Handles user logout.
-    This endpoint only confirms the user is authenticated.
-    The client is responsible for deleting the token.
-    """
-    logger.info(f"User {current_user.username} requested logout")
-    return {"message": f"Logout of {current_user.username} was successful"}
+async def logout_user(current_user: CurrentUserDep):
+    response = JSONResponse({"message": "Logout successful"})
+
+    response.delete_cookie(
+        key="access_token",
+        path="/",
+    )
+
+    logger.info(f"User {current_user.username} logged out")
+    return response

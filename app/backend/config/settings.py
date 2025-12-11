@@ -1,67 +1,131 @@
 import logging
 from pathlib import Path
+from functools import lru_cache
 
 import decouple
-import pydantic_settings
-from charset_normalizer.md import lru_cache
+from pydantic_settings import BaseSettings
+from pydantic import field_validator
+
 
 backend_settings = None
 
 
-class BackendBaseSettings(pydantic_settings.BaseSettings):
+class BackendBaseSettings(BaseSettings):
     ROOT_DIR: Path = Path(__file__).parent.parent.resolve()
 
     TITLE: str = "ISEP CTF BACKEND"
     VERSION: str = "0.0.1"
     TIMEZONE: str = "CET"
     DESCRIPTION: str | None = "Backend API for ISEP CTF WEBPROJECT"
-    ENV: str = decouple.config("ENV", default="dev", cast=str)  # type: ignore
+
+    COOKIE_DOMAIN: str = "localhost"
+
+    # REQUIRED FOR TEAM INVITES (Fix)
+    FRONTEND_DOMAIN: str = decouple.config(
+        "FRONTEND_DOMAIN",
+        default="http://localhost:5173"
+    )
+
+
+    # -----------------------------
+    # ENVIRONMENT MODE (dev / prod)
+    # -----------------------------
+    ENV: str = decouple.config("ENV", default="dev")
     DEBUG: bool = ENV == "dev"
 
-    SQLALCHEMY_DATABASE_URL: str = decouple.config("SQLALCHEMY_DATABASE_URL", cast=str)  # type: ignore
+    SQLALCHEMY_DATABASE_URL: str = decouple.config("SQLALCHEMY_DATABASE_URL")
 
-    RATE_LIMIT_PER_MINUTE: int = decouple.config("RATE_LIMIT_PER_MINUTE", cast=int)  # type: ignore
+    RATE_LIMIT_PER_MINUTE: int = decouple.config("RATE_LIMIT_PER_MINUTE", cast=int)
 
-    # Server settings
-    SERVER_HOST: str = decouple.config("SERVER_HOST", cast=str)  # type: ignore
-    SERVER_PORT: int = decouple.config("SERVER_PORT", cast=int)  # type: ignore
+    # -----------------------------
+    # SERVER SETTINGS
+    # -----------------------------
+    SERVER_HOST: str = decouple.config("SERVER_HOST")
+    SERVER_PORT: int = decouple.config("SERVER_PORT", cast=int)
 
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = decouple.config("ACCESS_TOKEN_EXPIRE_MINUTES", cast=int)  # type: ignore
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = decouple.config(
+        "ACCESS_TOKEN_EXPIRE_MINUTES", cast=int
+    )
 
-    # CORS middleware settings
-    ALLOWED_ORIGINS: list[str] = [
-        "http://localhost:3000",
-        "http://0.0.0.0:3000",
-        "http://127.0.0.1:3000",
-    ]
+    # -----------------------------
+    # CORS — dynamic by ENV
+    # -----------------------------
+    ALLOWED_ORIGINS: str = decouple.config(
+        "ALLOWED_ORIGINS",
+        default="http://localhost:5173"
+    )
 
-    ALLOWED_METHODS: list[str] = ["*"]
-    ALLOWED_HEADERS: list[str] = ["*"]
-    IS_ALLOWED_CREDENTIALS: bool = True
 
+    @property
+    def ALLOWED_ORIGINS_LIST(self) -> list[str]:
+        return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
+
+
+
+    ALLOWED_METHODS: list[str] = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    ALLOWED_HEADERS: list[str] = ["Authorization", "Content-Type"]
+    IS_ALLOWED_CREDENTIALS: bool = True  # must stay true for cookies
+
+    # -----------------------------
+    # LOGGING
+    # -----------------------------
     LOGGING_LEVEL: int = logging.INFO
     LOGGERS: tuple[str, str] = ("uvicorn.asgi", "uvicorn.access")
-    SERVER_WORKERS: int = decouple.config("SERVER_WORKERS", cast=int)  # type: ignore
+    SERVER_WORKERS: int = decouple.config("SERVER_WORKERS", cast=int)
 
-    # FastAPI settings
+    # -----------------------------
+    # JWT & SECURITY
+    # -----------------------------
+    JWT_ALGORITHM: str = decouple.config("JWT_ALGORITHM")
+    SECRET_KEY: str = decouple.config("SECRET_KEY")
+    HASHING_PEPPER: str | None = decouple.config("HASHING_PEPPER", default=None)
+
+    # -----------------------------
+    # API ROUTING
+    # -----------------------------
     API_VERSION: str = "v1"
     API_PREFIX: str = f"api/{API_VERSION}"
-    DOCS_URL: str = "/docs"
-    OPENAPI_URL: str = "/openapi.json"
-    REDOC_URL: str = "/redoc"
+    API_V1_STR: str = API_PREFIX
+
+    DOCS_URL: str = "/docs" if ENV == "dev" else None
+    OPENAPI_URL: str = "/openapi.json" if ENV == "dev" else None
+    REDOC_URL: str = "/redoc" if ENV == "dev" else None
     OPENAPI_PREFIX: str = ""
 
-    JWT_ALGORITHM: str = decouple.config("JWT_ALGORITHM", cast=str)  # type: ignore
-    SECRET_KEY: str = decouple.config("SECRET_KEY", cast=str)  # type: ignore
-    HASHING_PEPPER: str | None = decouple.config("HASHING_PEPPER", cast=str, default=None)  # type: ignore
+    # -----------------------------
+    # COOKIE SECURITY (DEV vs PROD)
+    # -----------------------------
+    @property
+    def COOKIE_SECURE(self) -> bool:
+        """
+        In production → cookies require HTTPS
+        In development → HTTPS not required
+        """
+        return self.ENV == "prod"
 
-    API_V1_STR: str = API_PREFIX
+    @property
+    def COOKIE_SAMESITE(self) -> str:
+        """
+        Prevents CSRF in production (Strict)
+        Allows convenience during development (Lax)
+        """
+        return "strict" if self.ENV == "prod" else "lax"
+
+    @property
+    def COOKIE_HTTPONLY(self) -> bool:
+        return True  # always true — protects against XSS
+
+    # -----------------------------
+    # SECURITY VALIDATION
+    # -----------------------------
+    @field_validator("SECRET_KEY")
+    def validate_secret_key(cls, v):
+        if len(v) < 32:
+            raise ValueError("SECRET_KEY must be at least 32 characters long for security.")
+        return v
 
     @property
     def backend_app_attributes(self) -> dict[str, str | bool | None]:
-        """
-        Set all `FastAPI` class' attributes with the custom values defined in `BackendBaseSettings`.
-        """
         return {
             "title": self.TITLE,
             "version": self.VERSION,
@@ -75,9 +139,9 @@ class BackendBaseSettings(pydantic_settings.BaseSettings):
         }
 
 
-@lru_cache
+@lru_cache()
 def get_settings() -> BackendBaseSettings:
     global backend_settings
-    if not backend_settings:
+    if backend_settings is None:
         backend_settings = BackendBaseSettings()
     return backend_settings

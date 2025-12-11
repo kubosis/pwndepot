@@ -1,31 +1,78 @@
-import datetime
-
-import pydantic
+from datetime import datetime
+from pydantic import EmailStr, constr, BaseModel
 
 from app.backend.schema.base import BaseSchemaModel
+from app.backend.db.models import RoleEnum
 
 
+
+
+# ------------------------------
+# CREATE USER (REGISTRATION)
+# ------------------------------
 class UserInCreate(BaseSchemaModel):
-    username: str
-    email: pydantic.EmailStr
-    password: str
+    username: constr(
+        min_length=3,
+        max_length=32,
+        pattern=r"^[a-zA-Z0-9_.-]+$",   # FIXED: regex - pattern
+    )
+
+    email: EmailStr
+
+    # Secure password rules:
+    # - Minimum 12 characters
+    # - Maximum 128 characters (DoS protection)
+    password: constr(
+        min_length=12,
+        max_length=128
+    )
 
 
+# ------------------------------
+# UPDATE USER
+# ------------------------------
 class UserInUpdate(BaseSchemaModel):
-    username: str | None
-    email: str | None
-    password: str | None
+    username: constr(
+        min_length=3,
+        max_length=32,
+        pattern=r"^[a-zA-Z0-9_.-]+$",   # FIXED
+    ) | None = None
+
+    email: EmailStr | None = None
+
+    password: constr(
+        min_length=12,
+        max_length=128
+    ) | None = None
 
 
+# ------------------------------
+# LOGIN REQUEST
+# ------------------------------
 class UserInLogin(BaseSchemaModel):
-    email: pydantic.EmailStr
-    password: str
+    email: EmailStr
+    password: str   # Raw password, validated at login only
+
+# ------------------------------
+# UPDATE PASSWORD REQUEST BY ADMIN
+# ------------------------------
+class AdminPasswordChange(BaseModel):
+    new_password: constr(
+        min_length=12,
+        max_length=128
+    )
 
 
+# ------------------------------
+# RESPONSE MODEL (SAFE) - email and role removed
+# ------------------------------
 class UserInResponse(BaseSchemaModel):
     id: int
     username: str
-    email: pydantic.EmailStr
+    role: RoleEnum
+    created_at: datetime
     is_verified: bool
-    created_at: datetime.datetime
-    role: str
+    team_name: str | None = None
+    team_id: int | None = None
+
+

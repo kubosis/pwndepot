@@ -9,6 +9,8 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/project
 ENV UV_COMPILE_BYTECODE=1
 
+ENV RUNNING_IN_DOCKER=1
+
 WORKDIR /project
 
 RUN apt-get update
@@ -20,6 +22,10 @@ COPY app/backend /project/app/backend
 
 ENV PATH="/project/.venv/bin:$PATH"
 
-EXPOSE 8844
+EXPOSE 8000
 
-CMD ["python", "app/backend/main.py"]
+CMD python -m app.backend.create_db && \
+    uvicorn app.backend.main:app \
+    --host 0.0.0.0 \
+    --port 8000
+

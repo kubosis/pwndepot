@@ -9,27 +9,24 @@ export default function Navbar({ ctfActive, loggedInUser, setLoggedInUser, authT
   const navigate = useNavigate();
 
   const handleLogout = async () => {
+  try {
     if (DEMO_MODE) {
-      // Demo mode only - remove from localStorage
       localStorage.removeItem("loggedInUser");
     } else {
-      // Production mode - call backend logout endpoint
-      try {
-      if (!DEMO_MODE && authToken) {
       await fetch(`${API_BASE_URL}/api/v1/users/logout`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${authToken}` },
+        credentials: "include",
       });
     }
-      } catch (err) {
-        console.warn("Logout request failed (possibly offline):", err);
-      }
-    }
+  } catch (err) {
+    console.warn("Logout request failed:", err);
+  }
 
-    setAuthToken(null);
-    setLoggedInUser(null);
-    navigate("/");
-  };
+  setLoggedInUser(null);
+  setAuthToken(null);
+  navigate("/");
+};
+
 
   return (
     <nav className="fixed top-0 left-0 w-full z-50 bg-gray-900 bg-opacity-80 backdrop-blur-sm flex justify-between items-center h-16 px-6">

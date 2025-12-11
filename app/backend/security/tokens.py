@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta, timezone
-
 import jwt
 
 from app.backend.config.settings import get_settings
@@ -7,11 +6,42 @@ from app.backend.config.settings import get_settings
 settings = get_settings()
 
 
+# ---------------------------------------------------------
+# ACCESS TOKEN
+# ---------------------------------------------------------
 def create_jwt_access_token(data: dict) -> str:
-    to_encode = data.copy()
+    now = datetime.now(timezone.utc)
 
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    payload = {
+        "sub": data.get("sub"),
+        "type": "access",
+        "iat": now,
+        "nbf": now,
+        "exp": now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+        "iss": "ISEP CTF"
+    }
 
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    encoded_jwt = jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
     return encoded_jwt
+
+
+# ---------------------------------------------------------
+# TEAM INVITE TOKEN
+# ---------------------------------------------------------
+def create_team_invite_token(team_id: int, join_code: str) -> str:
+    now = datetime.now(timezone.utc)
+
+    payload = {
+        "team_id": team_id,
+        "join_code": join_code,
+        "type": "team_invite",
+        "iat": now,
+        "nbf": now,
+        "exp": now + timedelta(days=7),    # invite link valid 7 days
+    }
+
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+
+
+def decode_team_invite_token(token: str) -> dict:
+    return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])

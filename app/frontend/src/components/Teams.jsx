@@ -1,92 +1,157 @@
-// Teams.jsx
+// src/components/Teams.jsx
 import React, { useState } from "react";
-import { hashPassword } from "../utils/passwordUtils";
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { api } from "../config/api";
 
 export default function Teams() {
+  const [checkingTeam, setCheckingTeam] = useState(true);
+  const navigate = useNavigate();
   const [teamName, setTeamName] = useState("");
   const [teamPassword, setTeamPassword] = useState("");
-  const [inviteToken, setInviteToken] = useState(""); // unique token placeholder
-  const [message, setMessage] = useState("");
 
-  // Handles team creation (frontend demo only)
+  const [inviteUrl, setInviteUrl] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+  const checkTeam = async () => {
+    try {
+      const res = await api.get("/teams/myteam");
+
+      if (res.status === 200) {
+        return navigate(`/team/${res.data.team_name}`);
+      }
+    } catch (err) {
+      if (err.response?.status !== 404) {
+        console.error("Failed checking team:", err);
+      }
+    }
+
+    setCheckingTeam(false); // finished checking
+  };
+
+  checkTeam();
+}, []);
+  if (checkingTeam) {
+    return (
+      <div className="register-container">
+        <div className="register-card profile-card">
+          <h2 className="profile-username">Checking your team...</h2>
+        </div>
+      </div>
+    );
+  }
+
+
+
   const handleCreateTeam = async () => {
+    setMessage("");
+    setError("");
+    setInviteUrl("");
+    setCopied(false);
+
     if (!teamName || !teamPassword) {
-      setMessage("Please enter both team name and password.");
+      setError("Please enter both team name and password.");
       return;
     }
     if (teamPassword.length < 8) {
-      setMessage("Password must be at least 8 characters long.");
+      setError("Password must be at least 8 characters long.");
       return;
     }
 
-    const hashedPassword = await hashPassword(teamPassword);
+    try {
+      const res = await api.post("/teams/create", {
+        team_name: teamName,
+        team_password: teamPassword,
+      });
 
-    // Example secure fetch
-    // await fetch("/api/teams/create", {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify({ teamName, teamPassword: hashedPassword }),
-    // });
-    // --- Backend note ---
-    // Backend should provide endpoint: POST /api/teams/create
-    // with { teamName, teamPassword }
-    // Response: { inviteToken }
-    // Backend must handle:
-    // 1. Team name uniqueness (reject duplicate names)
-    // 2. Password hashing (store only hashed version)
-    // 3. Token uniqueness (generate unique invite tokens)
-    // 4. Persistence in database (save team and members)
-    // 5. Ensure user belongs to only one team and he cannot create the team if he's in one (frontend: must display the message that: "You already belong to a team")
-    // 6. Backend ensures roles: boss of the team and members
+      const data = res.data;
+      setInviteUrl(data.invite_url);
 
-    // Generate a fake token for demo purposes
-    const fakeToken = Math.random().toString(36).substring(2, 10); 
-    setInviteToken(fakeToken);
+      setMessage(`Team "${data.team_name}" created! Share the link below.`);
+    } catch (err) {
+      console.error("Create team error:", err);
 
-    setMessage(
-      `Team "${teamName}" created! Invite link generated. Save this link because you cannot come back!`
-    );
+      const status = err.response?.status;
+      const detail = err.response?.data?.detail;
+
+      if (status === 401) {
+        setError("You must be logged in to create a team.");
+      } else if (status === 400 && detail === "User already in a team") {
+        setError("You already belong to a team.");
+      } else if (status === 409) {
+        setError("A team with this name already exists.");
+      } else {
+        setError("Failed to create team. Please try again.");
+      }
+    }
   };
-
-  // Construct invite link (frontend-only)
-  const inviteLink = inviteToken ? `${window.location.origin}/join-team?token=${inviteToken}` : "";
 
   return (
     <div className="register-container">
       <div className="register-card profile-card">
         <h2 className="profile-username">Teams</h2>
 
-        {/* Team creation form */}
         <div className="profile-stats">
           <h3>Create a Team</h3>
+
           <input
             type="text"
             placeholder="Team Name"
             value={teamName}
             onChange={(e) => setTeamName(e.target.value)}
           />
+
           <input
             type="password"
             placeholder="Team Password (min 8 characters)"
             value={teamPassword}
             onChange={(e) => setTeamPassword(e.target.value)}
           />
+
           <button onClick={handleCreateTeam} className="enabled-animation">
             Create Team
           </button>
         </div>
 
-        {/* Display invite link if generated */}
-        {inviteLink && (
+        {/* ONLY INVITE URL */}
+        {inviteUrl && (
           <div className="profile-stats">
-            <h3>Invite Link</h3>
-            <input type="text" value={inviteLink} readOnly className="readonly-input"/>
-            <p>Share this link with your friends to join the team.</p>
+            <h3>Team Invite Link</h3>
+
+            <div className="invite-box">
+              <input
+                type="text"
+                value={inviteUrl}
+                readOnly
+                className="readonly-input invite-input"
+              />
+
+              <button
+                className="fancy-btn invite-copy-btn"
+                onClick={() => {
+                  navigator.clipboard.writeText(inviteUrl);
+                  setCopied(true);
+
+                  // Hide "copied" message after 2 seconds
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+              >
+                Copy
+              </button>
+            </div>
+
+            {copied && <p className="success-text">Invite link copied!</p>}
+
+            <p>Share this link so others can join your team.</p>
           </div>
         )}
 
-        {/* Feedback message */}
-        {message && <p className="error-text">{message}</p>}
+        {error && <p className="error-text">{error}</p>}
+        {message && !error && <p className="success-text">{message}</p>}
       </div>
     </div>
   );
