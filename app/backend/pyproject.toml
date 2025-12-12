@@ -45,3 +45,18 @@ dependencies = [
 
 [tool.setuptools]
 include-package-data = true
+
+[tool.mypy]
+python_version = "3.10"
+# Exclude Alembic migration files from type-checking
+exclude = "^app/backend/alembic/.*"
+# Avoid duplicate-module-name errors when running mypy from the repo root
+explicit_package_bases = true
+
+# Silence missing-stub errors for SQLAlchemy (install types if you want stricter checks)
+[tool.mypy."sqlalchemy.*"]
+ignore_missing_imports = true
+
+# Ignore all Alembic modules entirely
+[tool.mypy."app.backend.alembic.*"]
+ignore_errors = true
