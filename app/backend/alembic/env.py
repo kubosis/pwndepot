@@ -3,16 +3,18 @@ from logging.config import fileConfig
 from pathlib import Path
 
 from alembic import context
-from sqlalchemy import engine_from_config
-
-sys.path.insert(0, Path(__file__).absolute().parent.parent.parent.parent.__str__())
+from sqlalchemy import engine_from_config, pool
 
 # import all database tables HERE ------------------------------
-from app.backend.db.base import Base  # noqa
-from app.backend.db.models import (
-    UserCompletedChallengeTable,  # noqa
+from app.backend.db.base import Base
+from app.backend.db.models import (  # noqa
+    UserCompletedChallengeTable,
 )
+
 # --------------------------------------------------------------
+target_metadata = Base.metadata
+
+sys.path.insert(0, Path(__file__).absolute().parent.parent.parent.parent.__str__())
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -22,17 +24,6 @@ config = context.config
 # This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
-
-# add your model's MetaData object here
-# for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
-target_metadata = Base.metadata
-
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
 
 
 def run_migrations_offline() -> None:
@@ -69,6 +60,7 @@ def run_migrations_online() -> None:
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
     )
 
     with connectable.connect() as connection:

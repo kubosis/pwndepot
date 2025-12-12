@@ -20,11 +20,7 @@ class BackendBaseSettings(BaseSettings):
     COOKIE_DOMAIN: str = "localhost"
 
     # REQUIRED FOR TEAM INVITES (Fix)
-    FRONTEND_DOMAIN: str = decouple.config(
-        "FRONTEND_DOMAIN",
-        default="http://localhost:5173"
-    )
-
+    FRONTEND_DOMAIN: str = decouple.config("FRONTEND_DOMAIN", default="http://localhost:5173")
 
     # -----------------------------
     # ENVIRONMENT MODE (dev / prod)
@@ -42,24 +38,16 @@ class BackendBaseSettings(BaseSettings):
     SERVER_HOST: str = decouple.config("SERVER_HOST")
     SERVER_PORT: int = decouple.config("SERVER_PORT", cast=int)
 
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = decouple.config(
-        "ACCESS_TOKEN_EXPIRE_MINUTES", cast=int
-    )
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = decouple.config("ACCESS_TOKEN_EXPIRE_MINUTES", cast=int)
 
     # -----------------------------
     # CORS — dynamic by ENV
     # -----------------------------
-    ALLOWED_ORIGINS: str = decouple.config(
-        "ALLOWED_ORIGINS",
-        default="http://localhost:5173"
-    )
-
+    ALLOWED_ORIGINS: str = decouple.config("ALLOWED_ORIGINS", default="http://localhost:5173")
 
     @property
     def ALLOWED_ORIGINS_LIST(self) -> list[str]:
         return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
-
-
 
     ALLOWED_METHODS: list[str] = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     ALLOWED_HEADERS: list[str] = ["Authorization", "Content-Type"]

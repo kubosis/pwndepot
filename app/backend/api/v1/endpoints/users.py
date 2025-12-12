@@ -36,8 +36,12 @@ router = fastapi.APIRouter(tags=["users"])
 settings = get_settings()
 
 
-
-def _construct_user_in_response(user: UserTable,*,team_id: int | None = None,team_name: str | None = None,) -> UserInResponse:
+def _construct_user_in_response(
+    user: UserTable,
+    *,
+    team_id: int | None = None,
+    team_name: str | None = None,
+) -> UserInResponse:
     return UserInResponse(
         id=user.id,
         username=user.username,
@@ -106,9 +110,7 @@ async def login_for_access_token(
         logger.warning(f"Unauthorized admin login attempt by {db_user.username}")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Not sufficient rights")
     # 2. Verify Password
-    if not account_repo.pwd_manager.verify_password(
-        login_data.password, db_user.hashed_password
-    ):
+    if not account_repo.pwd_manager.verify_password(login_data.password, db_user.hashed_password):
         logger.warning(f"Failed login attempt for email={login_email}")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 
@@ -119,9 +121,7 @@ async def login_for_access_token(
     access_token = create_jwt_access_token(data=token_data)
 
     # Cookie expiration
-    expiry_date = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-    )
+    expiry_date = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
     cookie_domain = settings.COOKIE_DOMAIN
 
@@ -162,7 +162,6 @@ async def get_user_profile(
     )
 
 
-
 # -----------------------------
 # CURRENT AUTHENTICATED USER
 # -----------------------------
@@ -177,7 +176,6 @@ async def get_me(current_user: CurrentUserDep, team_repo: TeamsRepositoryDep):
     )
 
 
-
 # -----------------------------
 # UPDATE USER
 # -----------------------------
@@ -189,23 +187,19 @@ async def update_user(
     current_admin: CurrentAdminDep,
 ):
     if current_admin.id == user_id:
-        raise HTTPException(
-            status_code=403,
-            detail="Admins cannot modify their own account via this endpoint"
-        )
+        raise HTTPException(status_code=403, detail="Admins cannot modify their own account via this endpoint")
 
     updated = await account_repo.update_account_by_id(user_id, user_update)
 
-    logger.warning(
-        f"ADMIN ACTION: {current_admin.username} updated user_id={user_id}"
-    )
+    logger.warning(f"ADMIN ACTION: {current_admin.username} updated user_id={user_id}")
 
     return _construct_user_in_response(updated)
+
 
 # -----------------------------
 # UPDATE PASSWORD (ADMIN)
 # -----------------------------
-@router.put("/{user_id}/password",status_code=status.HTTP_204_NO_CONTENT)
+@router.put("/{user_id}/password", status_code=status.HTTP_204_NO_CONTENT)
 async def admin_change_user_password(
     user_id: int,
     payload: AdminPasswordChange,
@@ -223,9 +217,8 @@ async def admin_change_user_password(
         new_password=payload.new_password,
     )
 
-    logger.warning(
-        f"ADMIN ACTION: {current_admin.username} changed password for user_id={user_id}"
-    )
+    logger.warning(f"ADMIN ACTION: {current_admin.username} changed password for user_id={user_id}")
+
 
 # -----------------------------
 # DELETE USER (ADMIN)

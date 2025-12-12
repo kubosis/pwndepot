@@ -26,7 +26,6 @@ class UserTable(Base):
         default=RoleEnum.USER,
     )
 
-
     hashed_password: Mapped[str] = mapped_column(String(1024), nullable=False)
     is_email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
@@ -142,12 +141,9 @@ class TeamTable(Base):
         cascade="all, delete-orphan",
     )
 
-    users: AssociationProxy[list["UserTable"]] = association_proxy(
-        "user_associations", "user"
-    )
+    users: AssociationProxy[list["UserTable"]] = association_proxy("user_associations", "user")
 
     __mapper_args__: ClassVar[dict] = {"eager_defaults": True}
-
 
 
 class UserInTeamTable(Base):

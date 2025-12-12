@@ -13,7 +13,7 @@ class UserInCreate(BaseSchemaModel):
     username: constr(
         min_length=3,
         max_length=32,
-        pattern=r"^[a-zA-Z0-9_.-]+$",   # FIXED: regex - pattern
+        pattern=r"^[a-zA-Z0-9_.-]+$",  # FIXED: regex - pattern
     )
 
     email: EmailStr
@@ -21,28 +21,25 @@ class UserInCreate(BaseSchemaModel):
     # Secure password rules:
     # - Minimum 12 characters
     # - Maximum 128 characters (DoS protection)
-    password: constr(
-        min_length=12,
-        max_length=128
-    )
+    password: constr(min_length=12, max_length=128)
 
 
 # ------------------------------
 # UPDATE USER
 # ------------------------------
 class UserInUpdate(BaseSchemaModel):
-    username: constr(
-        min_length=3,
-        max_length=32,
-        pattern=r"^[a-zA-Z0-9_.-]+$",   # FIXED
-    ) | None = None
+    username: (
+        constr(
+            min_length=3,
+            max_length=32,
+            pattern=r"^[a-zA-Z0-9_.-]+$",  # FIXED
+        )
+        | None
+    ) = None
 
     email: EmailStr | None = None
 
-    password: constr(
-        min_length=12,
-        max_length=128
-    ) | None = None
+    password: constr(min_length=12, max_length=128) | None = None
 
 
 # ------------------------------
@@ -50,16 +47,14 @@ class UserInUpdate(BaseSchemaModel):
 # ------------------------------
 class UserInLogin(BaseSchemaModel):
     email: EmailStr
-    password: str   # Raw password, validated at login only
+    password: str  # Raw password, validated at login only
+
 
 # ------------------------------
 # UPDATE PASSWORD REQUEST BY ADMIN
 # ------------------------------
 class AdminPasswordChange(BaseModel):
-    new_password: constr(
-        min_length=12,
-        max_length=128
-    )
+    new_password: constr(min_length=12, max_length=128)
 
 
 # ------------------------------
@@ -73,5 +68,3 @@ class UserInResponse(BaseSchemaModel):
     is_verified: bool
     team_name: str | None = None
     team_id: int | None = None
-
-

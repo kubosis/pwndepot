@@ -24,6 +24,7 @@ async def _generate_unique_join_code(async_session: AsyncSession) -> str:
         if not code_row:
             return code
 
+
 class TeamsCRUDRepository(BaseCRUDRepository):
     def __init__(self, async_session: AsyncSession):
         super().__init__(async_session)
@@ -59,7 +60,7 @@ class TeamsCRUDRepository(BaseCRUDRepository):
         except IntegrityError:
             await self.async_session.rollback()
             return None
-        
+
     # -------------------------------------------------------
     # GET TEAM FOR USER
     # -------------------------------------------------------
@@ -84,7 +85,7 @@ class TeamsCRUDRepository(BaseCRUDRepository):
         )
         query = await self.async_session.execute(stmt)
         return query.scalar()
-    
+
     async def read_team_by_name(self, name: str):
         stmt = (
             select(TeamTable)
@@ -127,7 +128,7 @@ class TeamsCRUDRepository(BaseCRUDRepository):
         team.team_password_hash = self.pwd_manager.hash_password(new_password)
         await self.async_session.commit()
         return True
-    
+
     # -------------------------------------------------------
     # VERIFY TEAM PASSWORD
     # -------------------------------------------------------
@@ -136,7 +137,6 @@ class TeamsCRUDRepository(BaseCRUDRepository):
         Returns True if password matches stored team password hash.
         """
         return self.pwd_manager.verify_password(password, team.team_password_hash)
-
 
     # -------------------------------------------------------
     # DELETE TEAM
@@ -148,9 +148,7 @@ class TeamsCRUDRepository(BaseCRUDRepository):
             return False
 
         # Delete user associations first
-        await self.async_session.execute(
-            delete(UserInTeamTable).where(UserInTeamTable.team_id == team_id)
-        )
+        await self.async_session.execute(delete(UserInTeamTable).where(UserInTeamTable.team_id == team_id))
 
         # Delete the team
         stmt = delete(TeamTable).where(TeamTable.id == team_id)
@@ -162,14 +160,11 @@ class TeamsCRUDRepository(BaseCRUDRepository):
         logger.info(f"Deleted team id={team_id} and cleared all user associations")
         return True
 
-
     # -------------------------------------------------------
     # JOIN TEAM
     # -------------------------------------------------------
     async def join_team(self, team: TeamTable, user: UserTable):
-        query = await self.async_session.execute(
-            select(UserInTeamTable).where(UserInTeamTable.user_id == user.id)
-        )
+        query = await self.async_session.execute(select(UserInTeamTable).where(UserInTeamTable.user_id == user.id))
         if query.scalar():
             return None
 
@@ -183,18 +178,14 @@ class TeamsCRUDRepository(BaseCRUDRepository):
     # LEAVE TEAM
     # -------------------------------------------------------
     async def leave_team(self, user: UserTable):
-        query = await self.async_session.execute(
-            select(UserInTeamTable).where(UserInTeamTable.user_id == user.id)
-        )
+        query = await self.async_session.execute(select(UserInTeamTable).where(UserInTeamTable.user_id == user.id))
         assoc = query.scalar()
         if not assoc:
             return False
 
         team_id = assoc.team_id
 
-        await self.async_session.execute(
-            delete(UserInTeamTable).where(UserInTeamTable.user_id == user.id)
-        )
+        await self.async_session.execute(delete(UserInTeamTable).where(UserInTeamTable.user_id == user.id))
         await self.async_session.commit()
 
         # delete empty team
@@ -206,7 +197,7 @@ class TeamsCRUDRepository(BaseCRUDRepository):
         logger.info(f"User id={user.id} left team id={team_id}")
 
         return True
-    
+
     # -------------------------------------------------------
     # TRANSFER CAPTAIN ROLE
     # -------------------------------------------------------
@@ -214,11 +205,7 @@ class TeamsCRUDRepository(BaseCRUDRepository):
         """
         Updates the captain_user_id for a team.
         """
-        stmt = (
-            sqlalchemy.update(TeamTable)
-            .where(TeamTable.id == team.id)
-            .values(captain_user_id=new_captain_id)
-        )
+        stmt = sqlalchemy.update(TeamTable).where(TeamTable.id == team.id).values(captain_user_id=new_captain_id)
 
         await self.async_session.execute(stmt)
         await self.async_session.commit()
@@ -227,7 +214,6 @@ class TeamsCRUDRepository(BaseCRUDRepository):
         await self.async_session.refresh(team)
 
         return True
-
 
     # -------------------------------------------------------
     # SCORE HISTORY

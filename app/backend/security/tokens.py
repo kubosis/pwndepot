@@ -19,7 +19,7 @@ def create_jwt_access_token(data: dict) -> str:
         "iat": now,
         "nbf": now,
         "exp": now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
-        "iss": "ISEP CTF"
+        "iss": "ISEP CTF",
     }
 
     encoded_jwt = jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
@@ -38,7 +38,7 @@ def create_team_invite_token(team_id: int, join_code: str) -> str:
         "type": "team_invite",
         "iat": now,
         "nbf": now,
-        "exp": now + timedelta(days=7),    # invite link valid 7 days
+        "exp": now + timedelta(days=7),  # invite link valid 7 days
     }
 
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
