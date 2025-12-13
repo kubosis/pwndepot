@@ -1,12 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.backend.schema.contact import ContactRequest
-from app.backend.utils.mail import send_contact_email
-from app.backend.utils.limiter import limiter
 from app.backend.db.session import AsyncSessionLocal
 from app.backend.repository.contact import save_contact_message
+from app.backend.schema.contact import ContactRequest
+from app.backend.utils.limiter import limiter
+from app.backend.utils.mail import send_contact_email
 
 router = APIRouter(tags=["contact"])
 
@@ -50,9 +50,9 @@ async def contact(
             "message": "Message send failed, but your message has been saved",
         }
 
-    except Exception:
+    except Exception as err:
         logger.exception("Contact form processing failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Something went wrong",
-        )
+        ) from err
