@@ -7,15 +7,14 @@ from app.backend.config.settings import get_settings
 
 settings = get_settings()
 
-# retry config (can be moved to settings later)
 SMTP_MAX_RETRIES = 3
 SMTP_RETRY_DELAY_SECONDS = 2
 
 
-def send_contact_email(*, name: str, email: str, message: str) -> None:
+def send_contact_email(*, name: str, email: str, message: str) -> bool:
     """
     Sends contact form email.
-    Retries on transient SMTP/network errors.
+    Returns True if email was sent, False otherwise.
     """
 
     msg = EmailMessage()
@@ -35,8 +34,6 @@ Message:
 """
     )
 
-    last_exception: Exception | None = None
-
     for attempt in range(1, SMTP_MAX_RETRIES + 1):
         try:
             with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10) as server:
@@ -47,11 +44,10 @@ Message:
                     server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
 
                 server.send_message(msg)
-                return
+                return True
 
-        except (SMTPException, OSError) as exc:
-            last_exception = exc
+        except (SMTPException, OSError):
             if attempt < SMTP_MAX_RETRIES:
                 time.sleep(SMTP_RETRY_DELAY_SECONDS)
             else:
-                raise exc
+                return False

@@ -137,19 +137,26 @@ export default function Contact() {
       const text = await response.text();
       const data = text ? JSON.parse(text) : null;
 
-      if (!response.ok || !data?.success) {
-        throw new Error("Failed to send message");
+      if (!data) {
+        throw new Error("Empty response");
+      }
+
+      if (!response.ok) {
+        throw new Error(data?.detail || "Request failed");
       }
 
       // UX delay (cosmetic only)
       await new Promise(r => setTimeout(r, 800));
 
       setFeedback({
-        type: "success",
-        text: "Your message has been sent successfully!",
+        type: data.success ? "success" : "info",
+        text: data.message,
       });
 
-      setFormData({ username: "", email: "", message: "" });
+      if (data.success) {
+        setFormData({ username: "", email: "", message: "" });
+      }
+
     } catch (err) {
       setFeedback({
         type: "error",

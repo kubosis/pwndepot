@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,7 +21,6 @@ async def get_db() -> AsyncSession:
 async def contact(
     request: Request,
     data: ContactRequest,
-    bg: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     logger.info(f"Contact form submitted: domain={data.email.split('@')[-1]}")
@@ -29,9 +28,10 @@ async def contact(
     try:
         saved = await save_contact_message(db, data)
 
+        email_sent = False
+
         if saved:
-            bg.add_task(
-                send_contact_email,
+            email_sent = send_contact_email(
                 name=data.name,
                 email=data.email,
                 message=data.message,
@@ -39,8 +39,20 @@ async def contact(
         else:
             logger.warning(f"Duplicate contact message: {data.email}")
 
-    except Exception as e:
+        if email_sent:
+            return {
+                "success": True,
+                "message": "Message has been sent successfully",
+            }
+
+        return {
+            "success": False,
+            "message": "Message send failed, but your message has been saved",
+        }
+
+    except Exception:
         logger.exception("Contact form processing failed")
-
-    return {"success": True}
-
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Something went wrong",
+        )
