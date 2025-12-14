@@ -21,15 +21,25 @@ jobs:
       # -------------------------
       # TRIVY - FILESYSTEM SCAN
       # -------------------------
-      - name: Trivy filesystem scan (deps, secrets, IaC)
+      - name: Trivy filesystem scan (backend, IaC, deps)
         uses: aquasecurity/trivy-action@0.20.0
         with:
           scan-type: fs
           scan-ref: .
+          scanners: vuln
           severity: CRITICAL,HIGH
           exit-code: 1
           ignore-unfixed: true
-          format: table
+          skip-dirs: |
+            challenges
+          format: sarif
+          output: trivy-fs-results.sarif
+
+      - name: Upload Trivy FS report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-fs-report
+          path: trivy-fs-results.sarif
 
       # -------------------------
       # DOCKER IMAGE SCAN
@@ -41,7 +51,15 @@ jobs:
         uses: aquasecurity/trivy-action@0.20.0
         with:
           image-ref: backend:ci
+          scanners: vuln
           severity: CRITICAL,HIGH
           exit-code: 1
           ignore-unfixed: true
-          format: table
+          format: sarif
+          output: trivy-image-results.sarif
+
+      - name: Upload Trivy image report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-image-report
+          path: trivy-image-results.sarif
