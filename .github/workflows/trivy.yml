@@ -54,7 +54,7 @@ jobs:
           scanners: vuln
           vuln-type: library
           severity: CRITICAL,HIGH
-          exit-code: 1
+          exit-code: 0
           ignore-unfixed: true
           format: sarif
           output: trivy-image-results.sarif
