@@ -142,7 +142,7 @@ class UserCRUDRepository(BaseCRUDRepository):
         user = await self.async_session.get(UserTable, user_id)
 
         if not user:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
         # Block password reuse
         if self.pwd_manager.verify_password(new_password, user.hashed_password):

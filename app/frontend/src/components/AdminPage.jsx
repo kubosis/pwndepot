@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { DEMO_MODE } from "../config/demo";
-import { API_BASE_URL } from "../config/api";
+import { api } from "../config/api";
 
 export default function AdminPage({ loggedInUser, setLoggedInUser}) {
   const initialTime = 7 * 24 * 3600;
@@ -32,17 +32,13 @@ export default function AdminPage({ loggedInUser, setLoggedInUser}) {
     }
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/v1/challenges/1/ctf-start`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ duration_seconds: initialTime }),
+      await api.post("/challenges/1/ctf-start", {
+        duration_seconds: initialTime,
       });
 
-      if (res.ok) {
         setCtfRunning(true);
         setTimeLeft(initialTime);
-      }
+
     } catch {
       setErrorMessage("Failed to start CTF");
     }
@@ -56,10 +52,7 @@ export default function AdminPage({ loggedInUser, setLoggedInUser}) {
     }
 
     try {
-      await fetch(`${API_BASE_URL}/api/v1/challenges/1/ctf-stop`, {
-        method: "POST",
-        credentials: "include",
-      });
+      await api.post("/challenges/1/ctf-stop");
 
       setCtfRunning(false);
       setTimeLeft(initialTime);
@@ -83,13 +76,8 @@ export default function AdminPage({ loggedInUser, setLoggedInUser}) {
     }
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/v1/users/`, {
-        credentials: "include",
-      });
-
-      if (!res.ok) return;
-
-      const data = await res.json();
+      const res = await api.get("/users/");
+      const data = res.data;
       setUsers(
         data.map((u) => ({
           id: u.id,
@@ -102,6 +90,12 @@ export default function AdminPage({ loggedInUser, setLoggedInUser}) {
       setErrorMessage("Failed to load users");
     }
   };
+
+  useEffect(() => {
+    if (loggedInUser?.role === "admin" && users.length === 0) {
+      loadUsers();
+    }
+  }, [loggedInUser]);
 
   // -------------------------
   // Admin login
@@ -119,8 +113,7 @@ export default function AdminPage({ loggedInUser, setLoggedInUser}) {
     }
 
     if (DEMO_MODE) {
-      setIsAdminLogged(true);
-      setIsAdminLoggedIn(true);
+      setLoggedInUser({ role: "admin", username: "demo_admin" });
       loadUsers();
       return;
     }
@@ -130,32 +123,17 @@ export default function AdminPage({ loggedInUser, setLoggedInUser}) {
       body.append("username", formData.email);
       body.append("password", formData.password);
 
-      const res = await fetch(
-        `${API_BASE_URL}/api/v1/users/login?admin=true`,
+      const res = await api.post(
+        "/users/login?admin=true",
+        body,
         {
-          method: "POST",
-          credentials: "include",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body,
         }
       );
 
-      if (!res.ok) {
-        const data = await res.json();
-        setErrorMessage(data.detail || "Invalid admin credentials. Slow down hacker!");
-        return;
-      }
+      const meRes = await api.get("/users/me");
 
-      const meRes = await fetch(`${API_BASE_URL}/api/v1/users/me`, {
-        credentials: "include",
-      });
-
-      if (!meRes.ok) {
-        setErrorMessage("Failed to load admin profile");
-        return;
-      }
-
-      const adminUser = await meRes.json();
+      const adminUser = meRes.data;
       if (adminUser.role !== "admin") {
         setErrorMessage("Admin privileges required");
         return;
@@ -178,12 +156,10 @@ export default function AdminPage({ loggedInUser, setLoggedInUser}) {
   // -------------------------
   const handleLogout = async () => {
     try {
-      await fetch(`${API_BASE_URL}/api/v1/users/logout`, {
-        method: "POST",
-        credentials: "include",
-      });
+      await api.post("/users/logout");
     } catch {}
 
+    setUsers([]);
     setLoginSuccess(false);
     setLoggedInUser(null);
   };
@@ -317,23 +293,9 @@ export default function AdminPage({ loggedInUser, setLoggedInUser}) {
                       return;
                     }
 
-                    const res = await fetch(
-                      `${API_BASE_URL}/api/v1/users/${deleteTarget.id}`,
-                      {
-                        method: "DELETE",
-                        credentials: "include",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          admin_password: adminPassword,
-                        }),
-                      }
-                    );
-
-                    if (!res.ok) {
-                      const data = await res.json();
-                      setDeleteError(data.detail || "Invalid admin password");
-                      return;
-                    }
+                    const res = await api.delete(`/users/${deleteTarget.id}`, {
+                      data: { password: adminPassword },
+                    });
 
                     // remove user
                     setUsers((prev) =>
@@ -350,8 +312,12 @@ export default function AdminPage({ loggedInUser, setLoggedInUser}) {
                       setDeleteSuccess(false);
                     }, 1500);
 
-                  } catch {
-                    setDeleteError("Network error");
+                  } catch (err) {
+                    if (err.response?.status === 403) {
+                      setDeleteError("Invalid admin password");
+                    } else {
+                      setDeleteError("Delete failed");
+                    }
                   }
                 }}
               >

@@ -47,6 +47,7 @@ class UserTable(Base):
 
     __mapper_args__: ClassVar[dict] = {"eager_defaults": True}
 
+
 class ContactMessageTable(Base):
     __tablename__ = "contact_messages"
 
@@ -61,7 +62,6 @@ class ContactMessageTable(Base):
         nullable=False,
         server_default=func.now(),
     )
-
 
     __mapper_args__: ClassVar[dict] = {"eager_defaults": True}
 
@@ -178,3 +178,24 @@ class UserInTeamTable(Base):
     team: Mapped["TeamTable"] = relationship(back_populates="user_associations")
 
     __mapper_args__: ClassVar[dict] = {"eager_defaults": True}
+
+
+class RefreshTokenTable(Base):
+    __tablename__ = "refresh_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    family_id: Mapped[str] = mapped_column(String(64), index=True)
+
+    token_hash: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    revoked: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    replaced_by: Mapped[int | None] = mapped_column(ForeignKey("refresh_tokens.id"))
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )

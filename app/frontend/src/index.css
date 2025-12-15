@@ -182,7 +182,14 @@ footer p {
   transform: translateY(-1px);}
 /* Password Strength */
 .password-strength {
-  margin-top: 0.8rem;}
+  width: 100%;
+  max-width: 320px;
+  text-align: center;}
+.password-strength-wrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
 .password-strength h3 {
   font-size: 0.8rem;
   color: #ccc;
@@ -192,6 +199,7 @@ footer p {
   width: 100%;
   background: #333;
   border-radius: 0.3rem;
+  text-align: center;
   overflow: hidden;
   margin-bottom: 0.2rem;}
 .strength-bar-fill {
@@ -207,7 +215,9 @@ footer p {
 .password-strength p {
   font-size: 0.75rem;
   color: #aaa;
-  margin: 0;}
+  text-align: left;
+  margin: 0;
+  min-height: 1.5em;}
 /* Bottom text */
 .register-card p {
   text-align: center;
@@ -274,13 +284,16 @@ button:not(:disabled).enabled-animation {
 }
 .error-text {
   color: #f87171; /* red */
+  min-height: 20px;
   font-size: 14px;
   margin-top: 6px;}
 .password-rules {
   list-style: none;
-  padding-left: 0px;
-  margin: 7px 0;
-  text-align: left;}
+  padding-left: 0;
+  margin: 7px auto;
+  width: fit-content;
+  text-align: left;  
+}
 .password-rules li {
   margin: 4px 0;}
 .password-rules .valid {
@@ -619,8 +632,8 @@ to {
   padding: 3rem;
   border-radius: 16px;
   box-shadow: 0 8px 25px rgba(255,0,0,0.5);
-  width: 100%;
-  max-width: 400px;
+  width: 400px;
+  max-width: 90%;
 
   /* CENTER EVERYTHING AND STACK VERTICALLY */
   display: flex;

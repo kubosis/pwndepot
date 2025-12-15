@@ -87,8 +87,7 @@ function AppContent() {
       return;
     }
 
-    api
-      .get("/users/me")
+    api.get("/users/me")
       .then((res) => {
         setLoggedInUser(res.data);
         if (res.data?.role === "admin") {

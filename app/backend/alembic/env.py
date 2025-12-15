@@ -5,6 +5,8 @@ from pathlib import Path
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from app.backend.config.settings import get_settings
+
 # import all database tables HERE ------------------------------
 from app.backend.db.base import Base
 from app.backend.db.models import (  # noqa
@@ -13,6 +15,19 @@ from app.backend.db.models import (  # noqa
 
 # --------------------------------------------------------------
 target_metadata = Base.metadata
+settings = get_settings()
+
+
+# this function is used to get a sync database URL from the async one
+def get_sync_db_url():
+    return settings.SQLALCHEMY_DATABASE_URL.replace(
+        "postgresql+asyncpg://",
+        "postgresql+psycopg://",
+    ).replace(
+        "sqlite+aiosqlite://",
+        "sqlite://",
+    )
+
 
 sys.path.insert(0, Path(__file__).absolute().parent.parent.parent.parent.__str__())
 
@@ -38,7 +53,7 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
+    url = get_sync_db_url()
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -58,7 +73,7 @@ def run_migrations_online() -> None:
 
     """
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        {"sqlalchemy.url": get_sync_db_url()},
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
