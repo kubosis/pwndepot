@@ -1,0 +1,58 @@
+name: StackHawk API Security Scan
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+jobs:
+  stackhawk:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install backend dependencies
+        working-directory: app/backend
+        run: |
+          uv sync --frozen
+
+      - name: Start backend (CI mode)
+        env:
+          ENV: ci
+          SQLALCHEMY_DATABASE_URL: postgresql+psycopg://test:test@localhost:5432/test_db
+          JWT_ALGORITHM: HS256
+          SECRET_KEY: ci_simulation_secret_key_32_chars!!!!
+          RATE_LIMIT_PER_MINUTE: 1000
+        run: |
+          uvicorn app.backend.main:app --host 0.0.0.0 --port 8000 &
+          sleep 15
+
+      - name: Run StackHawk
+        uses: stackhawk/hawkscan-action@v2
+        with:
+          apiKey: ${{ secrets.STACKHAWK_API_KEY }}

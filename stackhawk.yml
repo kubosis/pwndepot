@@ -1,0 +1,26 @@
+app:
+  applicationId: isep-ctf-api
+  env: ci
+
+scan:
+  target: http://localhost:8000
+
+  api:
+    spec: http://localhost:8000/openapi.json
+
+  excludePaths:
+    - /docs
+    - /redoc
+    - /health
+    - /metrics
+
+  throttling:
+    requestsPerSecond: 5
+
+  failOn:
+    severity:
+      - high
+      - critical
+
+  timeout:
+    minutes: 10

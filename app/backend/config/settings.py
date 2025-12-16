@@ -28,17 +28,35 @@ class BackendBaseSettings(BaseSettings):
     ENV: str = decouple.config("ENV", default="dev")
     DEBUG: bool = ENV == "dev"
 
-    SQLALCHEMY_DATABASE_URL: str = decouple.config("SQLALCHEMY_DATABASE_URL")
+    SQLALCHEMY_DATABASE_URL: str = decouple.config(
+        "SQLALCHEMY_DATABASE_URL",
+        default="sqlite+aiosqlite:///./app.db",
+    )
 
-    RATE_LIMIT_PER_MINUTE: int = decouple.config("RATE_LIMIT_PER_MINUTE", cast=int)
+    RATE_LIMIT_PER_MINUTE: int = decouple.config(
+        "RATE_LIMIT_PER_MINUTE",
+        cast=int,
+        default=60,
+    )
 
     # -----------------------------
     # SERVER SETTINGS
     # -----------------------------
-    SERVER_HOST: str = decouple.config("SERVER_HOST")
-    SERVER_PORT: int = decouple.config("SERVER_PORT", cast=int)
+    SERVER_HOST: str = decouple.config(
+        "SERVER_HOST",
+        default="0.0.0.0",
+    )
+    SERVER_PORT: int = decouple.config(
+        "SERVER_PORT",
+        cast=int,
+        default=8000,
+    )
 
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = decouple.config("ACCESS_TOKEN_EXPIRE_MINUTES", cast=int)
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = decouple.config(
+        "ACCESS_TOKEN_EXPIRE_MINUTES",
+        cast=int,
+        default=60,
+    )
 
     # -----------------------------
     # CORS — dynamic by ENV
@@ -56,23 +74,26 @@ class BackendBaseSettings(BaseSettings):
     # -----------------------------
     # EMAIL / SMTP
     # -----------------------------
-    SMTP_HOST: str = decouple.config("SMTP_HOST")
+    SMTP_HOST: str | None = decouple.config("SMTP_HOST", default=None)
     SMTP_PORT: int = decouple.config("SMTP_PORT", cast=int, default=587)
     SMTP_USE_TLS: bool = decouple.config("SMTP_USE_TLS", cast=bool, default=True)
 
-    SMTP_USERNAME: str = decouple.config("SMTP_USERNAME")
-    SMTP_PASSWORD: str = decouple.config("SMTP_PASSWORD")
+    SMTP_USERNAME: str | None = decouple.config("SMTP_USERNAME", default=None)
+    SMTP_PASSWORD: str | None = decouple.config("SMTP_PASSWORD", default=None)
 
-    MAIL_FROM: str = decouple.config("MAIL_FROM")
-    CONTACT_RECEIVER_EMAIL: str = decouple.config("CONTACT_RECEIVER_EMAIL")
-
+    MAIL_FROM: str | None = decouple.config("MAIL_FROM", default=None)
+    CONTACT_RECEIVER_EMAIL: str | None = decouple.config("CONTACT_RECEIVER_EMAIL", default=None)
 
     # -----------------------------
     # LOGGING
     # -----------------------------
     LOGGING_LEVEL: int = logging.INFO
     LOGGERS: tuple[str, str] = ("uvicorn.asgi", "uvicorn.access")
-    SERVER_WORKERS: int = decouple.config("SERVER_WORKERS", cast=int)
+    SERVER_WORKERS: int = decouple.config(
+        "SERVER_WORKERS",
+        cast=int,
+        default=1,
+    )
 
     # -----------------------------
     # JWT & SECURITY
@@ -88,9 +109,9 @@ class BackendBaseSettings(BaseSettings):
     API_PREFIX: str = f"api/{API_VERSION}"
     API_V1_STR: str = API_PREFIX
 
-    DOCS_URL: str = "/docs" if ENV == "dev" else None
-    OPENAPI_URL: str = "/openapi.json" if ENV == "dev" else None
-    REDOC_URL: str = "/redoc" if ENV == "dev" else None
+    DOCS_URL: str | None = "/docs" if ENV == "dev" else None
+    OPENAPI_URL: str | None = "/openapi.json" if ENV in ("dev", "ci") else None
+    REDOC_URL: str | None = "/redoc" if ENV == "dev" else None
     OPENAPI_PREFIX: str = ""
 
     # -----------------------------
