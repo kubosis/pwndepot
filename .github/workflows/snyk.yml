@@ -1,0 +1,55 @@
+name: Snyk Challenges & Dependency Security Scan
+
+on:
+  push:
+    branches: [ main, devel ]
+  pull_request:
+    branches: [ main, devel ]
+  workflow_dispatch:
+
+jobs:
+  snyk-full-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Snyk CLI
+        run: |
+          npm install -g snyk
+          snyk --version
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      # Code scan (Go, Python, JS/TS, itd.)
+      - name: Scan all project dependencies
+        run: |
+          echo "Scanning source code for vulnerable dependencies..."
+          snyk test --all-projects --severity-threshold=medium --json-file-output=code_report.json || true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      # scan all Docker images in challenges/*
+      - name: Build and scan all challenges
+        run: |
+          echo "Searching for Dockerfiles in challenges/..."
+          find challenges -type f -name Dockerfile | while read dockerfile; do
+            dir=$(dirname "$dockerfile")
+            name=$(basename "$dir")
+            echo "Building image for challenge: $name"
+            docker build -t "$name:latest" "$dir"
+
+            echo "Scanning image with Snyk..."
+            snyk container test "$name:latest" --severity-threshold=medium --json > "${name}_report.json" || true
+
+            echo "Finished scanning $name"
+          done
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Upload Snyk reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: snyk-full-reports
+          path: "*.json"

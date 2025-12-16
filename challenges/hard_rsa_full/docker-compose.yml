@@ -1,0 +1,12 @@
+services:
+  hard_rsa_full:
+    build: ./server
+    container_name: hard_rsa_full
+    ports:
+      - "9001:5000"
+    env_file:
+      - .env
+    volumes:
+      - ./pub.json:/pub.json:ro   
+    restart: unless-stopped
+

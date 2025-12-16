@@ -1,0 +1,5 @@
+name: stored-comment-injector
+category: Web
+points: 300
+author: Paweł Jamroziak
+description: Two-step stored XSS challenge where an admin bot stores a secret in localStorage.

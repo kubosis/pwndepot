@@ -1,0 +1,7 @@
+name: hard_rsa_full
+category: crypto
+points: 500
+author: Rn7595 Navin
+description: |
+Full RSA challenge where the player must recover the private key from the exposed public key and decrypt the encrypted flag.
+No hints are included. Only the infrastructure to serve the public key and ciphertext is provided.
