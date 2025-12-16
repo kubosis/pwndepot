@@ -1,13 +1,15 @@
 app:
-  applicationId: isep-ctf-api
+  applicationId: 33d2f6d3-f04c-41c4-ab2a-afe320086535
   env: ci
+  host: http://localhost:8000
+
+  openApiConf:
+    path: /openapi.json
+
+  autoPolicy: true
+  autoInputVectors: true
 
 scan:
-  target: http://localhost:8000
-
-  api:
-    spec: http://localhost:8000/openapi.json
-
   excludePaths:
     - /docs
     - /redoc
