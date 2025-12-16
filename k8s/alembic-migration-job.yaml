@@ -1,0 +1,76 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migration
+  namespace: default
+  annotations:
+    # run before deployment
+    argocd.argoproj.io/hook: PreSync
+
+    # delete job after success
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      containers:
+      - name: migration
+        # update tag
+        image: ghcr.io/kubosis/pwndepot/backend:bca12a1
+
+        command: ["/bin/sh", "-c"]
+        args:
+          - "alembic -c /project/app/backend/alembic.ini upgrade head"
+        envFrom:
+        - secretRef:
+            name: db-creds
+        - secretRef:
+            name: backend-keys
+
+        # Needs same env as backend
+        env:
+          # Dynamic Database URL construction
+          - name: SQLALCHEMY_POSTGRE_SYNC_URL
+            value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)"
+          - name: SQLALCHEMY_POSTGRE_ASYNC_URL
+            value: "postgresql+asyncpg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)"
+
+          # Server Config
+          - name: UVICORN_SERVER_HOST
+            value: "0.0.0.0"
+          - name: UVICORN_SERVER_PORT
+            value: "8000"
+          - name: API_VERSION
+            value: "v1"
+          - name: ENV
+            value: "PROD"
+          - name: SERVER_WORKERS
+            value: "2"
+          - name: RATE_LIMIT_PER_MINUTE
+            value: "10"
+
+          # CORS
+          - name: ALLOWED_ORIGINS
+            value: "http://localhost:5173,http://127.0.0.1:5173,http://77.42.44.18"
+
+          # Email Settings
+          - name: SMTP_HOST
+            value: "smtp.gmail.com"
+          - name: SMTP_PORT
+            value: "587"
+          - name: SMTP_USE_TLS
+            value: "true"
+          - name: SMTP_USERNAME
+            value: "ourmail@gmail.com"
+          - name: MAIL_FROM
+            value: "ISEP CTF <ourmail@gmail.com>"
+          - name: CONTACT_RECEIVER_EMAIL # TODO
+            value: "ourmail@gmail.com"
+          - name: JWT_ALGORITHM
+            value: "HS256"
+          - name: ACCESS_TOKEN_EXPIRE_MINUTES
+            value: "15"
+
+      restartPolicy: Never

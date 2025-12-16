@@ -45,7 +45,9 @@ async def _construct_full_team_response(team, team_repo, include_invite=True):
     for s in scores:
         # s: UserCompletedChallengeTable
         points = getattr(s.challenge, "points", 0)
-        score_records.append({"date_time": s.completed_at, "obtained_by": getattr(s.user, "username", ""), "score": points})
+        score_records.append(
+            {"date_time": s.completed_at, "obtained_by": getattr(s.user, "username", ""), "score": points}
+        )
         total += points
 
     users = []
@@ -116,10 +118,7 @@ async def create_team(
 # REGENERATE INVITE (CAPTAIN OR ADMIN)
 # -------------------------------------------------------
 @router.post("/actions/{team_name}/regen-invite")
-async def regen_invite(team_name: str,
-                       current_user: CurrentUserDep,
-                       team_repo: TeamsRepositoryDep):
-
+async def regen_invite(team_name: str, current_user: CurrentUserDep, team_repo: TeamsRepositoryDep):
     team = await team_repo.read_team_by_name(team_name)
     if not team:
         raise HTTPException(404, "Team not found")
@@ -142,13 +141,10 @@ async def change_password(
     account_password: str = Body(...),
     current_user: CurrentUserDep = None,
     team_repo: TeamsRepositoryDep = None,
-    account_repo: UserRepositoryDep = None,   # <-- MUSI BYĆ!
+    account_repo: UserRepositoryDep = None,
 ):
     # verify account password
-    if not account_repo.pwd_manager.verify_password(
-        account_password,
-        current_user.hashed_password
-    ):
+    if not account_repo.pwd_manager.verify_password(account_password, current_user.hashed_password):
         raise HTTPException(401, "Incorrect account password")
 
     # load team
@@ -168,12 +164,12 @@ async def change_password(
 # -------------------------------------------------------
 # DELETE TEAM (CAPTAIN OR ADMIN)
 # -------------------------------------------------------
-@router.delete("/actions/{team_name}",response_model=dict,status_code=status.HTTP_200_OK)
+@router.delete("/actions/{team_name}", response_model=dict, status_code=status.HTTP_200_OK)
 async def delete_team_by_id(
     team_name: str,
     current_user: CurrentUserDep,
     team_repo: TeamsRepositoryDep,
-    team_password: str = Body(..., embed=True)
+    team_password: str = Body(..., embed=True),
 ):
     team = await team_repo.read_team_by_name(team_name)
     if not team:
@@ -194,9 +190,6 @@ async def delete_team_by_id(
     return {"message": "Team deleted"}
 
 
-
-
-
 # -------------------------------------------------------
 # JOIN TEAM
 # -------------------------------------------------------
@@ -206,7 +199,6 @@ async def join_team_invite(
     current_user: CurrentUserDep,
     team_repo: TeamsRepositoryDep,
 ):
-    
     # 1. Decode and validate token
     try:
         data = decode_team_invite_token(payload.token)
@@ -219,10 +211,10 @@ async def join_team_invite(
     team = await team_repo.read_team_by_id(team_id)
     if not team:
         raise HTTPException(404, "Team not found")
-    
+
     # enforce max 5 users
-    if len(team.user_associations) >= 5:
-        raise HTTPException(400, "Team is full (maximum 5 members).")
+    if len(team.user_associations) >= 6:
+        raise HTTPException(400, "Team is full (maximum 6 members).")
 
     # 3. Ensure user is not already in a team
     existing = await team_repo.get_team_for_user(current_user.id)
@@ -239,10 +231,8 @@ async def join_team_invite(
     if not joined:
         raise HTTPException(400, "Unable to join team")
 
-    return {
-        "message": "Joined successfully",
-        "team_name": team.name
-    }
+    return {"message": "Joined successfully", "team_name": team.name}
+
 
 @router.get("/join")
 async def preview_invite_link(token: str, team_repo: TeamsRepositoryDep):
@@ -264,13 +254,13 @@ async def preview_invite_link(token: str, team_repo: TeamsRepositoryDep):
 
     return {"team_name": team.name}
 
+
 # -------------------------------------------------------
 # LEAVE TEAM
 # -------------------------------------------------------
 @router.put("/leave", response_model=dict, status_code=status.HTTP_200_OK)
-async def leave_current_team(current_user: CurrentUserDep,
-                             team_repo: TeamsRepositoryDep):
-     # Get team info
+async def leave_current_team(current_user: CurrentUserDep, team_repo: TeamsRepositoryDep):
+    # Get team info
     team = await team_repo.get_team_for_user(current_user.id)
     if not team:
         raise HTTPException(400, "User is not in a team")
@@ -290,10 +280,10 @@ async def leave_current_team(current_user: CurrentUserDep,
 
     return {"message": "Successfully left the team"}
 
+
 # -------------------------------------------------------
 # TRANSFER CAPTAIN ROLE
 # -------------------------------------------------------
-
 @router.post("/actions/{team_name}/transfer-captain", response_model=dict)
 async def transfer_captain(
     team_name: str,
@@ -301,7 +291,6 @@ async def transfer_captain(
     current_user: CurrentUserDep = None,
     team_repo: TeamsRepositoryDep = None,
 ):
-
     # Load team
     team = await team_repo.read_team_by_name(team_name)
     if not team:
@@ -330,14 +319,11 @@ async def transfer_captain(
     return {"message": "Captain role transferred successfully"}
 
 
-
 # -------------------------------------------------------
 # GET MY TEAM
 # -------------------------------------------------------
 @router.get("/myteam", response_model=FullTeamInResponse, status_code=status.HTTP_200_OK)
-async def get_my_team(current_user: CurrentUserDep,
-                      team_repo: TeamsRepositoryDep):
-
+async def get_my_team(current_user: CurrentUserDep, team_repo: TeamsRepositoryDep):
     team = await team_repo.get_team_for_user(current_user.id)
     if not team:
         raise HTTPException(404, "User has no active team")
@@ -350,13 +336,13 @@ async def get_my_team(current_user: CurrentUserDep,
 # -------------------------------------------------------
 @router.get("", response_model=list[FullTeamInResponse], status_code=status.HTTP_200_OK)
 async def list_teams(team_repo: TeamsRepositoryDep):
-
     teams = await team_repo.list_all_teams()
     response = []
     for t in teams:
         response.append(await _construct_full_team_response(t, team_repo))
 
     return response
+
 
 # -------------------------------------------------------
 # GET TEAM BY NAME

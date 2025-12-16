@@ -1,31 +1,33 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import logo from "../assets/logo.jpg";
 import "../index.css";
 import { DEMO_MODE } from "../config/demo"; 
-import { API_BASE_URL } from "../config/api.jsx";
+import { api } from "../config/api";
+
 
 export default function Navbar({ ctfActive, loggedInUser, setLoggedInUser}) {
   const navigate = useNavigate();
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const handleLogout = async () => {
-  try {
-    if (DEMO_MODE) {
-      localStorage.removeItem("loggedInUser");
-    } else {
-      await fetch(`${API_BASE_URL}/api/v1/users/logout`, {
-        method: "POST",
-        credentials: "include",
-      });
+    if (loggingOut) return;
+    setLoggingOut(true);
+
+    try {
+      if (DEMO_MODE) {
+        localStorage.removeItem("loggedInUser");
+      } else {
+        await api.post("/users/logout");
+      }
+    } catch (err) {
+      console.warn("Logout request failed:", err);
+    } finally {
+      setLoggedInUser(null);
+      navigate("/");
+      setLoggingOut(false);
     }
-  } catch (err) {
-    console.warn("Logout request failed:", err);
-  }
-
-  setLoggedInUser(null);
-  navigate("/");
-};
-
+  };
 
   return (
     <nav className="fixed top-0 left-0 w-full z-50 bg-gray-900 bg-opacity-80 backdrop-blur-sm flex justify-between items-center h-16 px-6">

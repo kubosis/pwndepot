@@ -22,6 +22,8 @@ import ChallengesPage from "./components/ChallengesPage";
 import Contact from "./components/Contact";
 import DemoBanner from "./components/DemoBanner";
 import CaptainPanel from "./components/CaptainPanel";
+import MfaVerify from "./components/MfaVerify";
+import MfaSetup from "./components/MfaSetup";
 
 import { api } from "./config/api";
 import { DEMO_MODE } from "./config/demo";
@@ -87,8 +89,7 @@ function AppContent() {
       return;
     }
 
-    api
-      .get("/users/me")
+    api.get("/users/me")
       .then((res) => {
         setLoggedInUser(res.data);
         if (res.data?.role === "admin") {
@@ -268,6 +269,20 @@ function AppContent() {
               <AdminRoute>
                 <ChangePassword isAdminLoggedIn={isAdminLoggedIn} />
               </AdminRoute>
+            }
+          />
+
+          <Route
+          path="/mfa-verify"
+          element={<MfaVerify setLoggedInUser={setLoggedInUser} />}
+          />
+
+          <Route
+            path="/mfa/setup"
+            element={
+              <ProtectedRoute>
+                <MfaSetup />
+              </ProtectedRoute>
             }
           />
 

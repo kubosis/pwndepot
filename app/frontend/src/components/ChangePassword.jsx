@@ -154,42 +154,44 @@ export default function ChangePassword({ isAdminLoggedIn }) {
           </button>
         </form>
 
-        <div className="password-strength">
-          <h3>Password Requirements</h3>
-          <div className="strength-bar">
-            <div
-              className={`strength-bar-fill ${getStrengthClass()}`}
-              style={{ width: `${(passwordStrength / 4) * 100}%` }}
-            />
+        <div className="password-strength-wrapper">
+          <div className="password-strength">
+            <h3>Password Requirements</h3>
+            <div className="strength-bar">
+              <div
+                className={`strength-bar-fill ${getStrengthClass()}`}
+                style={{ width: `${(passwordStrength / 4) * 100}%` }}
+              />
+            </div>
+            <p>{passwordMessage}</p>
+            <ul className="password-rules">
+              <li className={formData.password.length >= 12 ? "valid" : "invalid"}>
+                At least 12 characters
+              </li>
+              <li className={/[A-Z]/.test(formData.password) ? "valid" : "invalid"}>
+                At least 1 uppercase letter
+              </li>
+              <li className={/[0-9]/.test(formData.password) ? "valid" : "invalid"}>
+                At least 1 number
+              </li>
+              <li
+                className={
+                  /[!@#$%^&*(),.?":{}|<>]/.test(formData.password)
+                    ? "valid"
+                    : "invalid"
+                }
+              >
+                At least 1 special character
+              </li>
+            </ul>
+
+            {!doPasswordsMatch && formData.confirmPassword.length > 0 && (
+              <p className="error-text">Passwords do not match</p>
+            )}
+
+            {errorMessage && <p className="error-text mt-2">{errorMessage}</p>}
           </div>
-          <p>{passwordMessage}</p>
-          <ul className="password-rules">
-            <li className={formData.password.length >= 12 ? "valid" : "invalid"}>
-              At least 12 characters
-            </li>
-            <li className={/[A-Z]/.test(formData.password) ? "valid" : "invalid"}>
-              At least 1 uppercase letter
-            </li>
-            <li className={/[0-9]/.test(formData.password) ? "valid" : "invalid"}>
-              At least 1 number
-            </li>
-            <li
-              className={
-                /[!@#$%^&*(),.?":{}|<>]/.test(formData.password)
-                  ? "valid"
-                  : "invalid"
-              }
-            >
-              At least 1 special character
-            </li>
-          </ul>
-
-          {!doPasswordsMatch && formData.confirmPassword.length > 0 && (
-            <p className="error-text">Passwords do not match</p>
-          )}
-
-          {errorMessage && <p className="error-text mt-2">{errorMessage}</p>}
-        </div>
+      </div>
 
         {successMessage && <p className="success-text mt-4">{successMessage}</p>}
         <button

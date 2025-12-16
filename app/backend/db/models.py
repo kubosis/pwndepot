@@ -14,6 +14,11 @@ class RoleEnum(enum.Enum):
     USER = "user"
 
 
+class StatusEnum(enum.Enum):
+    SUSPENDED = "suspended"
+    ACTIVE = "active"
+
+
 class UserTable(Base):
     __tablename__ = "users"
 
@@ -26,11 +31,20 @@ class UserTable(Base):
         default=RoleEnum.USER,
     )
 
-
     hashed_password: Mapped[str] = mapped_column(String(1024), nullable=False)
     is_email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    status: Mapped[StatusEnum] = mapped_column(
+        Enum(StatusEnum, name="role_enum", native_enum=False),
+        nullable=False,
+        default=StatusEnum.ACTIVE,
+    )
+
+    # mfa
+    mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    mfa_secret: Mapped[str | None] = mapped_column(String(128), default=None, nullable=True)
 
     # relationships
     team_associations: Mapped[list["UserInTeamTable"]] = relationship(
@@ -44,6 +58,24 @@ class UserTable(Base):
     teams: AssociationProxy[list["TeamTable"]] = association_proxy("team_associations", "team")
     completed_challenges: AssociationProxy[list["ChallengeTable"]] = association_proxy(
         "challenge_associations", "challenge"
+    )
+
+    __mapper_args__: ClassVar[dict] = {"eager_defaults": True}
+
+
+class ContactMessageTable(Base):
+    __tablename__ = "contact_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    email: Mapped[str] = mapped_column(String(128), nullable=False)
+    message: Mapped[str] = mapped_column(String(2000), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), index=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
 
     __mapper_args__: ClassVar[dict] = {"eager_defaults": True}
@@ -68,7 +100,7 @@ class ChallengeTable(Base):
     # or do we want to deploy it
     is_download: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
-    difficulty: Mapped[Enum] = mapped_column(
+    difficulty: Mapped[DifficultyEnum] = mapped_column(
         Enum(DifficultyEnum, name="difficulty_enum", native_enum=False),
         nullable=False,
     )
@@ -142,12 +174,9 @@ class TeamTable(Base):
         cascade="all, delete-orphan",
     )
 
-    users: AssociationProxy[list["UserTable"]] = association_proxy(
-        "user_associations", "user"
-    )
+    users: AssociationProxy[list["UserTable"]] = association_proxy("user_associations", "user")
 
     __mapper_args__: ClassVar[dict] = {"eager_defaults": True}
-
 
 
 class UserInTeamTable(Base):
@@ -164,3 +193,24 @@ class UserInTeamTable(Base):
     team: Mapped["TeamTable"] = relationship(back_populates="user_associations")
 
     __mapper_args__: ClassVar[dict] = {"eager_defaults": True}
+
+
+class RefreshTokenTable(Base):
+    __tablename__ = "refresh_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    family_id: Mapped[str] = mapped_column(String(64), index=True)
+
+    token_hash: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    revoked: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    replaced_by: Mapped[int | None] = mapped_column(ForeignKey("refresh_tokens.id"))
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )

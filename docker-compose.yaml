@@ -1,31 +1,51 @@
-version: '3.8'
-
 services:
+  postgres:
+    image: postgres:16
+    container_name: postgres_db
+    restart: unless-stopped
+    env_file:
+      - .env.services
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
   backend:
     build:
       context: .
       dockerfile: app/backend/Dockerfile
     container_name: fastapi_backend
+    volumes:
+      - ./app/backend/alembic:/project/app/backend/alembic
+      - ./challenges/deployment:/project/challenges/deployment
     env_file:
       - ./app/backend/.env
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./app/backend:/project/app/backend
     restart: unless-stopped
+    expose:
+      - "8000"  # Only accessible to other containers
 
   frontend:
     build:
       context: .
       dockerfile: app/frontend/Dockerfile
     container_name: frontend_app
-    ports:
-      - "5173:5173"
-    volumes:
-      # Mount source for hot-reloading
-      - ./app/frontend:/project/app/frontend
-      - /project/app/frontend/node_modules
+    expose:
+      - "80"
     restart: unless-stopped
-    # specific environment variables for frontend can go here
     env_file:
-      - ./app/frontend/.env.development
+      - ./app/frontend/.env
+
+  nginx:
+    image: nginx:1.25
+    container_name: nginx_proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - frontend
+
+volumes:
+  postgres_data:

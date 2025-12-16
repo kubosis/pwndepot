@@ -78,45 +78,96 @@ export default function Contact() {
   // HANDLE INPUT CHANGES
   // -----------------------------------
   const handleChange = (e) => {
+    if (feedback) setFeedback(null);
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   // -----------------------------------
   // HANDLE FORM SUBMISSION
   // -----------------------------------
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Trim inputs to prevent whitespace-only values
-    const trimmedData = {
-      username: formData.username.trim(),
+    const payload = {
+      name: formData.username.trim(),
       email: formData.email.trim(),
       message: formData.message.trim(),
     };
 
-    // Simple frontend validation
-    if (!trimmedData.username || !trimmedData.email || !trimmedData.message) {
+    if (!payload.name || !payload.email || !payload.message) {
       setFeedback({ type: "error", text: "All fields are required." });
       return;
     }
 
     setLoading(true);
 
-    // ------------------------------
-    // TODO: BACKEND INTEGRATION
-    // Replace the setTimeout with an API POST request to send the form data
-    // Example:
-    // fetch("/api/contact", { method: "POST", body: JSON.stringify(trimmedData) })
-    //   .then(res => res.json())
-    //   .then(data => { ...handle success... })
-    //   .catch(err => { ...handle error... })
-    // ------------------------------
-    setTimeout(() => {
+    const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
+
+    try {
+      if (DEMO_MODE) {
+        // ----------------------
+        // DEMO MODE (no backend)
+        // ----------------------
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        setFeedback({
+          type: "success",
+          text: "Demo mode: message sent successfully!",
+        });
+
+        setFormData({ username: "", email: "", message: "" });
+        return;
+      }
+
+      // ----------------------
+      // REAL BACKEND MODE
+      // ----------------------
+      console.log("API BASE URL =", import.meta.env.VITE_API_BASE_URL);
+      const response = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/api/v1/contact`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : null;
+
+      if (!data) {
+        throw new Error("Empty response");
+      }
+
+      if (!response.ok) {
+        throw new Error(data?.detail || "Request failed");
+      }
+
+      // UX delay (cosmetic only)
+      await new Promise(r => setTimeout(r, 800));
+
+      setFeedback({
+        type: data.success ? "success" : "info",
+        text: data.message,
+      });
+
+      if (data.success) {
+        setFormData({ username: "", email: "", message: "" });
+      }
+
+    } catch (err) {
+      setFeedback({
+        type: "error",
+        text: "Something went wrong. Please try again later.",
+      });
+    } finally {
       setLoading(false);
-      setFeedback({ type: "success", text: "Your message has been sent successfully!" });
-      setFormData({ username: "", email: "", message: "" });
-    }, 1000);
+    }
   };
+
+
 
   return (
     <div className="contact-page">

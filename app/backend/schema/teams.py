@@ -80,6 +80,7 @@ class FullTeamInResponse(BaseSchemaModel):
     class Config:
         from_attributes = True
 
+
 # -----------------------------
 # INVITE TOKEN RESPONSE
 # -----------------------------

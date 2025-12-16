@@ -188,3 +188,7 @@ app/backend/.env
 testuser.txt
 
 logs/
+
+.env.services
+
+values.yaml

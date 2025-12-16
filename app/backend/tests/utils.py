@@ -7,7 +7,9 @@ from app.backend.security.tokens import create_jwt_access_token
 pwd_manager = PasswordManager()
 
 
-async def create_admin_user(session, *, username="admin", email="admin@example.com", password="AdminPass123!") -> UserTable:
+async def create_admin_user(
+    session, *, username="admin", email="admin@example.com", password="AdminPass123!"
+) -> UserTable:
     hashed = pwd_manager.hash_password(password)
     admin = UserTable(
         username=username,

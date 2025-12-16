@@ -77,6 +77,15 @@ export default function Login({ setLoggedInUser }) {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
       });
 
+      // --- NEW MFA CHECK ---
+      if (loginRes.data.mfa_required) {
+        setSuccessMessage("Credentials accepted. MFA required.");
+        // Redirect to the verification page
+        setTimeout(() => navigate("/mfa-verify"), 800);
+        return;
+      }
+      // ---------------------
+
       if (loginRes.status !== 200) {
         setErrorMessage("Invalid email or password.");
         setLoading(false);

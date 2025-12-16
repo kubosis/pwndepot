@@ -75,7 +75,6 @@ class UserCRUDRepository(BaseCRUDRepository):
         result = await self.async_session.execute(stmt)
         return result.scalars().first()
 
-
     # -----------------------------
     async def read_account_by_email(self, email: str) -> UserTable | None:
         stmt = sqlalchemy.select(UserTable).where(UserTable.email == email)
@@ -107,9 +106,7 @@ class UserCRUDRepository(BaseCRUDRepository):
 
             # Begin update
             update_stmt = (
-                sqlalchemy.update(UserTable)
-                .where(UserTable.id == id)
-                .values(updated_at=sqlalchemy_functions.now())
+                sqlalchemy.update(UserTable).where(UserTable.id == id).values(updated_at=sqlalchemy_functions.now())
             )
 
             if "username" in new_account_data:
@@ -135,6 +132,7 @@ class UserCRUDRepository(BaseCRUDRepository):
             await self.async_session.rollback()
             logger.warning("Account update failed due to duplicate email/username.")
             raise DBEntityAlreadyExists("Username or email already taken") from e
+
     # -----------------------------
     async def change_password_by_admin(
         self,
@@ -144,7 +142,7 @@ class UserCRUDRepository(BaseCRUDRepository):
         user = await self.async_session.get(UserTable, user_id)
 
         if not user:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
         # Block password reuse
         if self.pwd_manager.verify_password(new_password, user.hashed_password):
@@ -155,6 +153,7 @@ class UserCRUDRepository(BaseCRUDRepository):
 
         user.hashed_password = self.pwd_manager.hash_password(new_password)
         await self.async_session.commit()
+
     # -----------------------------
     async def delete_account_by_id(self, id: int) -> None:
         # 1. Check if account exists
@@ -189,4 +188,3 @@ class UserCRUDRepository(BaseCRUDRepository):
         db_email = email_query.scalar()
 
         return db_email is not None
-

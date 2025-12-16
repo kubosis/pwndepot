@@ -1,19 +1,28 @@
+# ruff: noqa: E402
+
 import asyncio
 import os
 import sys
-from pathlib import Path
 from collections.abc import AsyncGenerator
+from contextlib import suppress
+from pathlib import Path
 
+import httpx
 import pytest
 import pytest_asyncio
-import httpx
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-# Állítsuk be a szükséges környezeti változókat, hogy a beállítások töltésekor legyen minden érték.
 ROOT_DIR = Path(__file__).resolve().parents[3]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
+
+from app.backend.api.v1 import deps
+from app.backend.db.base import Base
+from app.backend.main import app
+
+with suppress(Exception):
+    app.state.limiter.enabled = False
 
 os.environ.setdefault("ENV", "dev")
 os.environ.setdefault("DOCS_URL", "/docs")
@@ -30,15 +39,6 @@ os.environ.setdefault("HASHING_PEPPER", "test_pepper_value_1234567890")
 os.environ.setdefault("SERVER_WORKERS", "1")
 os.environ.setdefault("ALLOWED_ORIGINS", "http://localhost:5173")
 os.environ.setdefault("FRONTEND_DOMAIN", "http://localhost:5173")
-
-from app.backend.api.v1 import deps
-from app.backend.db.base import Base
-from app.backend.main import app
-
-try:
-    app.state.limiter.enabled = False
-except Exception:
-    pass
 
 TEST_DB_URL = os.environ["SQLALCHEMY_DATABASE_URL"]
 

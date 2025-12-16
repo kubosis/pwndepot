@@ -1,11 +1,13 @@
 import pytest
 
 from app.backend.db.models import DifficultyEnum
-from app.backend.tests.utils import authenticate_client, create_admin_user, create_challenge, register_user
+from app.backend.tests.utils import authenticate_client, create_admin_user, create_challenge, login_user, register_user
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="Backend bug: ChallengeTable.valid_until is missing, so the list_challenges endpoint raises an error.")
+@pytest.mark.xfail(
+    reason="Backend bug: ChallengeTable.valid_until is missing, so the list_challenges endpoint raises an error."
+)
 async def test_list_get_and_submit_challenge(client, db_session):
     challenge = await create_challenge(
         db_session,
@@ -58,7 +60,9 @@ async def test_list_get_and_submit_challenge(client, db_session):
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="CTF start/stop endpoints currently call the repository methods with an incorrect signature.")
+@pytest.mark.xfail(
+    reason="CTF start/stop endpoints currently call the repository methods with an incorrect signature."
+)
 async def test_ctf_start_stop_endpoints(client, db_session):
     challenge = await create_challenge(
         db_session,

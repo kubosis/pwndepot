@@ -1,6 +1,5 @@
 import pytest
 
-from app.backend.db.models import RoleEnum, UserTable
 from app.backend.tests.utils import authenticate_client, create_admin_user, register_user
 
 
