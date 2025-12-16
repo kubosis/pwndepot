@@ -47,7 +47,6 @@ async def get_current_user(
     request: Request,
     session: AsyncSessionDep,
 ) -> UserTable:
-
     token = request.cookies.get("access_token")
     if not token:
         raise HTTPException(
@@ -65,17 +64,10 @@ async def get_current_user(
         token_data = TokenPayload(**payload)
 
     except jwt.ExpiredSignatureError as err:
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED,
-            "Token expired."
-        ) from err
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token expired.") from err
 
     except (jwt.PyJWTError, ValidationError) as err:
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED,
-            "Invalid authentication token."
-        ) from err
-
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid authentication token.") from err
 
     user = await session.get(UserTable, int(token_data.sub))
 
@@ -108,7 +100,6 @@ async def get_self_or_admin(
     current_user: CurrentUserDep,
     session: AsyncSessionDep,
 ) -> UserTable:
-
     target = await session.get(UserTable, user_id)
     if not target:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found.")
@@ -140,14 +131,8 @@ def get_repository(repo_type: type[BaseCRUDRepository]) -> Callable:
 # -----------------------------
 # CORRECT REPOSITORY DEPENDENCIES
 # -----------------------------
-UserRepositoryDep = Annotated[
-    UserCRUDRepository, Depends(get_repository(UserCRUDRepository))
-]
+UserRepositoryDep = Annotated[UserCRUDRepository, Depends(get_repository(UserCRUDRepository))]
 
-TeamsRepositoryDep = Annotated[
-    TeamsCRUDRepository, Depends(get_repository(TeamsCRUDRepository))
-]
+TeamsRepositoryDep = Annotated[TeamsCRUDRepository, Depends(get_repository(TeamsCRUDRepository))]
 
-ChallengesRepositoryDep = Annotated[
-    ChallengesCRUDRepository, Depends(get_repository(ChallengesCRUDRepository))
-]
+ChallengesRepositoryDep = Annotated[ChallengesCRUDRepository, Depends(get_repository(ChallengesCRUDRepository))]

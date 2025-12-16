@@ -6,7 +6,6 @@ COPY app/frontend/package.json app/frontend/package-lock.json* /project/app/fron
 
 WORKDIR /project/app/frontend
 
-# Install dependencies
 RUN apt-get update --fix-missing
 RUN npm install
 

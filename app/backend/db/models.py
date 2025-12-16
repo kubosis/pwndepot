@@ -26,7 +26,6 @@ class UserTable(Base):
         default=RoleEnum.USER,
     )
 
-
     hashed_password: Mapped[str] = mapped_column(String(1024), nullable=False)
     is_email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
@@ -45,6 +44,24 @@ class UserTable(Base):
     completed_challenges: AssociationProxy[list["ChallengeTable"]] = association_proxy(
         "challenge_associations", "challenge"
     )
+
+    __mapper_args__: ClassVar[dict] = {"eager_defaults": True}
+
+class ContactMessageTable(Base):
+    __tablename__ = "contact_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    email: Mapped[str] = mapped_column(String(128), nullable=False)
+    message: Mapped[str] = mapped_column(String(2000), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), index=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
 
     __mapper_args__: ClassVar[dict] = {"eager_defaults": True}
 
@@ -142,12 +159,9 @@ class TeamTable(Base):
         cascade="all, delete-orphan",
     )
 
-    users: AssociationProxy[list["UserTable"]] = association_proxy(
-        "user_associations", "user"
-    )
+    users: AssociationProxy[list["UserTable"]] = association_proxy("user_associations", "user")
 
     __mapper_args__: ClassVar[dict] = {"eager_defaults": True}
-
 
 
 class UserInTeamTable(Base):

@@ -24,8 +24,5 @@ ENV PATH="/project/.venv/bin:$PATH"
 
 EXPOSE 8000
 
-CMD python -m app.backend.create_db && \
-    uvicorn app.backend.main:app \
-    --host 0.0.0.0 \
-    --port 8000
 
+CMD ["uvicorn", "app.backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
