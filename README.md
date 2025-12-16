@@ -72,7 +72,7 @@ To run the platform locally for development purposes:
 
 1.  **Clone the repository:**
     ```bash
-    git clone [https://github.com/kubosis/pwndepot.git](https://github.com/kubosis/pwndepot.git)
+    git clone https://github.com/kubosis/pwndepot.git
     cd pwndepot
     ```
 
@@ -96,3 +96,4 @@ To run the platform locally for development purposes:
 
 ## 📜 License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
