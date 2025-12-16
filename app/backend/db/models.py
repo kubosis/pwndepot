@@ -14,6 +14,11 @@ class RoleEnum(enum.Enum):
     USER = "user"
 
 
+class StatusEnum(enum.Enum):
+    SUSPENDED = "suspended"
+    ACTIVE = "active"
+
+
 class UserTable(Base):
     __tablename__ = "users"
 
@@ -30,6 +35,16 @@ class UserTable(Base):
     is_email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    status: Mapped[StatusEnum] = mapped_column(
+        Enum(StatusEnum, name="role_enum", native_enum=False),
+        nullable=False,
+        default=StatusEnum.ACTIVE,
+    )
+
+    # mfa
+    mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    mfa_secret: Mapped[str | None] = mapped_column(String(128), default=None, nullable=True)
 
     # relationships
     team_associations: Mapped[list["UserInTeamTable"]] = relationship(

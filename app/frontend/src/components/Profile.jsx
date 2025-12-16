@@ -9,6 +9,7 @@ export default function Profile() {
   const [user, setUser] = useState(null);
   const [challengeData, setChallengeData] = useState([]);
   const [notFound, setNotFound] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
 
   const PIE_COLORS = [
     "#22c55e",
@@ -25,6 +26,13 @@ export default function Profile() {
         const userRes = await api.get(`/users/profile/${username}`);
         setUser(userRes.data);
         setNotFound(false);
+
+        try {
+          const meRes = await api.get("/users/me");
+          setCurrentUser(meRes.data);
+        } catch (err) {
+          // User might not be logged in, ignore
+        }
 
         // 2) Fetch solved challenges by category (API may not exist yet)
         try {
@@ -69,65 +77,80 @@ export default function Profile() {
   const totalSolved = challengeData.reduce((sum, c) => sum + c.value, 0);
 
   return (
-    <div className="register-container">
-      <div className="register-card profile-card">
-        <h2 className="profile-username">{user.username}</h2>
+      <div className="register-container">
+        <div className="register-card profile-card">
+          <h2 className="profile-username">{user.username}</h2>
 
-        {/* USER DETAILS */}
-        <div className="profile-stats">
-          <p><strong>Score:</strong> {user.score ?? 0}</p>
+          {/* USER DETAILS */}
+          <div className="profile-stats">
+            <p><strong>Score:</strong> {user.score ?? 0}</p>
 
-          <p>
-            <strong>Team:</strong>{" "}
-            {user.team_name ? (
-              <Link
-                to={`/team/${user.team_name}`}
-                className="team-link"
-                style={{ color: "#facc15" }}
-              >
-                {user.team_name}
-              </Link>
-            ) : (
-              <span style={{ color: "#bbb" }}>No team</span>
-            )}
-          </p>
+            <p>
+              <strong>Team:</strong>{" "}
+              {user.team_name ? (
+                  <Link
+                      to={`/team/${user.team_name}`}
+                      className="team-link"
+                      style={{color: "#facc15"}}
+                  >
+                    {user.team_name}
+                  </Link>
+              ) : (
+                  <span style={{color: "#bbb"}}>No team</span>
+              )}
+            </p>
 
 
-          <p>
-            <strong>Total Challenges Solved:</strong>{" "}
-            {totalSolved > 0 ? totalSolved : "No challenges completed yet"}
-          </p>
-        </div>
-
-        {/* PIE CHART */}
-        {totalSolved > 0 && (
-          <div className="profile-chart">
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie
-                  data={challengeData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={90}
-                  label
-                >
-                  {challengeData.map((entry, index) => (
-                    <Cell key={index} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
+            <p>
+              <strong>Total Challenges Solved:</strong>{" "}
+              {totalSolved > 0 ? totalSolved : "No challenges completed yet"}
+            </p>
           </div>
-        )}
 
-        <div className="profile-footer">
-          <Link to="/Rankings" className="fancy-btn">Back to Scoreboard</Link>
-        </div>
-      </div>
-    </div>
-  );
+          {/* PIE CHART */}
+          {totalSolved > 0 && (
+              <div className="profile-chart">
+                <ResponsiveContainer width="100%" height={260}>
+                  <PieChart>
+                    <Pie
+                        data={challengeData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={90}
+                        label
+                    >
+                      {challengeData.map((entry, index) => (
+                          <Cell key={index} fill={entry.color}/>
+                      ))}
+                    </Pie>
+                    <Tooltip/>
+                    <Legend/>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+  )
+}
+
+    {currentUser && currentUser.username === user.username && (
+              <div className="profile-stats" style={{ marginTop: "20px", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "20px" }}>
+                  <h3>Security</h3>
+                  {user.mfa_enabled ? (
+                      <p style={{ color: "#22c55e", fontWeight: "bold" }}>✓ MFA Enabled</p>
+                  ) : (
+                      <Link to="/mfa/setup" className="fancy-btn" style={{marginTop: '10px'}}>
+                          Enable Two-Factor Auth
+                      </Link>
+                  )}
+              </div>
+          )}
+
+  <div className="profile-footer">
+    <Link to="/Rankings" className="fancy-btn">Back to Scoreboard</Link>
+  </div>
+</div>
+</div>
+)
+  ;
 }

@@ -126,7 +126,6 @@ async def login_for_access_token(
     admin: bool = False,
 ):
     # 1. Get the User from DB
-    # the form data by default contains username, but we want to login with mail
     login_email = login_data.username
     db_user = await account_repo.read_account_by_email(login_email)
 
@@ -137,22 +136,49 @@ async def login_for_access_token(
     if admin and db_user.role != RoleEnum.ADMIN:
         logger.warning(f"Unauthorized admin login attempt by {db_user.username}")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Not sufficient rights")
+
     # 2. Verify Password
     if not account_repo.pwd_manager.verify_password(login_data.password, db_user.hashed_password):
         logger.warning(f"Failed login attempt for email={login_email}")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 
+    # ==================================================================
+    # PATH A: MFA IS ENABLED (Intermediate Step)
+    # ==================================================================
+    if db_user.mfa_enabled:
+        token_data = {"sub": str(db_user.id), "mfv": False}
+
+        access_token = create_jwt_access_token(
+            data=token_data,
+        )
+
+        # Return a response telling the Frontend to redirect to the MFA input page
+        response = JSONResponse({"message": "MFA required", "mfa_required": True})
+
+        # Set the Partial Cookie
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=settings.COOKIE_HTTPONLY,
+            secure=settings.COOKIE_SECURE,
+            samesite=settings.COOKIE_SAMESITE,
+            path="/",
+            domain=settings.COOKIE_DOMAIN,
+        )
+
+        return response
+
+    # ==================================================================
+    # PATH B: MFA IS DISABLED (Full Login)
+    # ==================================================================
+
     logger.info(f"User {db_user.email} logged in successfully.")
 
-    # Create JWT
-    token_data = {"sub": str(db_user.id)}
+    # Create FULL Access Token
+    token_data = {"sub": str(db_user.id), "mfv": True}
     access_token = create_jwt_access_token(data=token_data)
 
-    # --------------------------------------------------
-    # REFRESH TOKEN (ROTATION ENABLED)
-    # --------------------------------------------------
     raw_refresh, hashed_refresh, refresh_expires, family_id = generate_refresh_token()
-
     refresh = RefreshTokenTable(
         user_id=db_user.id, token_hash=hashed_refresh, expires_at=refresh_expires, family_id=family_id
     )
@@ -162,10 +188,9 @@ async def login_for_access_token(
 
     # Cookie expiration
     expiry_date = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-
     cookie_domain = settings.COOKIE_DOMAIN
 
-    response = JSONResponse({"message": "Login successful"})
+    response = JSONResponse({"message": "Login successful", "mfa_required": False})
 
     # ACCESS TOKEN
     response.set_cookie(

@@ -1,6 +1,9 @@
 import sys
-from logging.config import fileConfig
 from pathlib import Path
+
+sys.path.insert(0, Path(__file__).absolute().parent.parent.parent.parent.__str__())
+
+from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
@@ -17,19 +20,6 @@ from app.backend.db.models import (  # noqa
 target_metadata = Base.metadata
 settings = get_settings()
 
-
-# this function is used to get a sync database URL from the async one
-def get_sync_db_url():
-    return settings.SQLALCHEMY_DATABASE_URL.replace(
-        "postgresql+asyncpg://",
-        "postgresql+psycopg://",
-    ).replace(
-        "sqlite+aiosqlite://",
-        "sqlite://",
-    )
-
-
-sys.path.insert(0, Path(__file__).absolute().parent.parent.parent.parent.__str__())
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -53,7 +43,7 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = get_sync_db_url()
+    url = settings.SQLALCHEMY_DATABASE_URL
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -73,7 +63,7 @@ def run_migrations_online() -> None:
 
     """
     connectable = engine_from_config(
-        {"sqlalchemy.url": get_sync_db_url()},
+        {"sqlalchemy.url": settings.SQLALCHEMY_DATABASE_SYNC_URL},
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )

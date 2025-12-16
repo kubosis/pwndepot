@@ -71,10 +71,10 @@ app = _create_fastapi_backend(settings)
 if __name__ == "__main__":
     uvicorn.run(
         "app.backend.main:app",
-        host=settings.SERVER_HOST,
-        port=settings.SERVER_PORT,
+        host=settings.UVICORN_SERVER_HOST,
+        port=settings.UVICORN_SERVER_PORT,
         reload=settings.DEBUG
         and os.getenv("RUNNING_IN_DOCKER", "0") != "1",  # disable reload in docker to avoid issues with file watchers
         workers=1,  # workers > 1 breaks reload + rate limiter in dev
-        log_level=settings.LOGGING_LEVEL,
+        log_level=settings.UVICORN_LOGGING_LEVEL,
     )

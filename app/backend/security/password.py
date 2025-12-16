@@ -22,7 +22,7 @@ class PasswordManager:
 
     def __init__(self):
         self._hash_ctx = CryptContext(schemes=["argon2"], deprecated="auto")
-        self._pepper = settings.HASHING_PEPPER
+        self._pepper = settings.JWT_HASHING_PEPPER
 
     def _apply_pepper(self, raw_password: str) -> str:
         """Apply HMAC-based pepper to password before hashing if `HASHING_PEPPER` env was set"""

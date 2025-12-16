@@ -3,11 +3,12 @@ from typing import Annotated
 
 import jwt
 from fastapi import Depends, HTTPException, Request, status
+from loguru import logger
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.backend.config.settings import get_settings
-from app.backend.db.models import RoleEnum, UserTable
+from app.backend.db.models import RoleEnum, StatusEnum, UserTable
 from app.backend.db.session import AsyncSessionLocal
 from app.backend.repository.base import BaseCRUDRepository
 from app.backend.repository.challenges import ChallengesCRUDRepository
@@ -38,6 +39,7 @@ class TokenPayload(BaseModel):
     nbf: int | None = None
     iss: str | None = None
     type: str | None = None
+    mfv: bool | None = None
 
 
 # -----------------------------
@@ -58,26 +60,76 @@ async def get_current_user(
     try:
         payload = jwt.decode(
             token,
-            settings.SECRET_KEY,
+            settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM],
         )
         token_data = TokenPayload(**payload)
 
     except jwt.ExpiredSignatureError as err:
+        logger.info("Error: Login attempt with invalid token")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token expired.") from err
 
     except (jwt.PyJWTError, ValidationError) as err:
+        logger.info("Error: Login attempt with invalid token")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid authentication token.") from err
 
     user = await session.get(UserTable, int(token_data.sub))
 
     if not user:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User no longer exists.")
+        logger.info("Error: User does not exist")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User does not exists.")
+
+    if user.status == StatusEnum.SUSPENDED:
+        logger.info(f"Error: Suspended user login attempt by {user.username}")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User suspended.")
+
+    if not user.is_email_verified:
+        logger.info(f"Error: Unverified email login attempt by {user.username}")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Unverified email.")
+
+    # --- MFA LOGIC ---
+    # If the user has turned on MFA, but the token says they haven't passed it yet
+    if user.mfa_enabled and not token_data.mfv:
+        logger.info("Error: MFA")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "MFA required.", headers={"X-MFA-Required": "true"})
+    # ---------------------
 
     return user
 
 
 CurrentUserDep = Annotated[UserTable, Depends(get_current_user)]
+
+
+# -----------------------------
+# PARTIALLY LOGGED IN USER DEPENDENCY (MFA)
+# -----------------------------
+async def get_current_user_partial(
+    request: Request,
+    session: AsyncSessionDep,
+) -> UserTable:
+    """
+    Same as get_current_user, but DOES NOT enforce mfa_verified=True.
+    Used ONLY for the MFA verification step.
+    """
+    token = request.cookies.get("access_token")
+    if not token:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated.")
+
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        token_data = TokenPayload(**payload)
+    except (jwt.PyJWTError, ValidationError):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token.") from None
+
+    user = await session.get(UserTable, int(token_data.sub))
+
+    if not user:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found.") from None
+
+    return user
+
+
+PartiallyLoggedInUserDep = Annotated[UserTable, Depends(get_current_user_partial)]
 
 
 # -----------------------------

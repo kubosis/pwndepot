@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.backend.db.models import ContactMessageTable
 from app.backend.schema.contact import ContactRequest
 
-
 SPAM_WINDOW_MINUTES = 5
 
 

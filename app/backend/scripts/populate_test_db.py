@@ -44,6 +44,7 @@ async def seed_db():
                 email="admin@example.com",
                 role=models.RoleEnum.ADMIN,
                 hashed_password=pwd_mgr.hash_password("adminpass"),
+                is_email_verified=True,
             ),
         ]
 
