@@ -1,3 +1,5 @@
+![PwnDépôt Logo](assets/pwndepot_long.png)
+
 # 🚩 PwnDépôt
 
 [![Tests](https://github.com/kubosis/pwndepot/actions/workflows/tests.yml/badge.svg)](https://github.com/kubosis/pwndepot/actions/workflows/tests.yml)
