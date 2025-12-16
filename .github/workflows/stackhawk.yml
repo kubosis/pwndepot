@@ -2,8 +2,9 @@ name: StackHawk API Security Scan
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main, devel ]
   pull_request:
+    branches: [ main, devel ]
 
 jobs:
   stackhawk:
