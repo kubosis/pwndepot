@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - deployment
     paths:
       - 'app/**'        # Only run if app code changes
       - '.github/workflows/deploy.yml'
@@ -31,7 +30,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GH_TOKEN }}
 
       - name: Generate Short SHA
         id: vars

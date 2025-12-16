@@ -7,7 +7,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/kubosis/pwndepot.git
-    targetRevision: deployment # TODO: change to main after testing
+    targetRevision: main
     path: k8s
 
   destination:
