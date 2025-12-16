@@ -70,16 +70,17 @@ jobs:
 
       - name: Update Kubernetes manifests
         run: |
-          # We will create this folder in the next step
           cd k8s
           
-          # Use sed to replace the image tag in the yaml files
-          # This looks for "image: .../backend:..." and replaces the tag
+          # backend manifest
           sed -i "s|image: .*/backend:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend:${{ needs.build-and-push.outputs.short_sha }}|g" backend-deployment.yaml
           
+          # db migrations
+          sed -i "s|image: .*/backend:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend:${{ needs.build-and-push.outputs.short_sha }}|g" alembic-migration-job.yaml
+          
+          # frontend manifest
           sed -i "s|image: .*/frontend:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:${{ needs.build-and-push.outputs.short_sha }}|g" frontend-deployment.yaml
           
-          # Check if anything changed
           if [[ -n $(git status -s) ]]; then
             git config user.name "GitHub Action"
             git config user.email "action@github.com"

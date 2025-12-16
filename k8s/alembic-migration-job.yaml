@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migration
+  namespace: default
+  annotations:
+    # run before deployment
+    argocd.argoproj.io/hook: PreSync
+
+    # delete job after success
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      containers:
+      - name: migration
+        # update tag
+        image: ghcr.io/kubosis/pwndepot/backend:latest
+
+        command: ["/bin/sh", "-c"]
+        args:
+          - "alembic -c /project/app/backend/alembic.ini upgrade head"
+        envFrom:
+        - secretRef:
+            name: db-creds
+        - secretRef:
+            name: backend-keys
+        env:
+          - name: SQLALCHEMY_POSTGRE_SYNC_URL
+            value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)"
+          - name: SQLALCHEMY_POSTGRE_ASYNC_URL
+            value: "postgresql+asyncpg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)"
+
+      restartPolicy: Never
