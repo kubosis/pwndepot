@@ -17,6 +17,7 @@ services:
     container_name: fastapi_backend
     volumes:
       - ./app/backend/alembic:/project/app/backend/alembic
+      - ./challenges/deployment:/project/challenges/deployment
     env_file:
       - ./app/backend/.env
     restart: unless-stopped

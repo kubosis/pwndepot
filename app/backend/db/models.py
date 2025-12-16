@@ -100,7 +100,7 @@ class ChallengeTable(Base):
     # or do we want to deploy it
     is_download: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
-    difficulty: Mapped[Enum] = mapped_column(
+    difficulty: Mapped[DifficultyEnum] = mapped_column(
         Enum(DifficultyEnum, name="difficulty_enum", native_enum=False),
         nullable=False,
     )

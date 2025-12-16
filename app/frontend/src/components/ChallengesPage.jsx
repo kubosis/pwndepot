@@ -1,113 +1,42 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
+import { api } from "../config/api"; // Ensure this is configured for axios
 import { DEMO_MODE } from "../config/demo";
 
-// ==================== Mock Data (demo mode) ====================
-const teams = [
-  { name: "CryptoMasters", users: ["alice", "bob"] },
-  { name: "WebWizards", users: ["charlie", "dave"] },
-];
+// ==================== Icons ====================
+const DownloadIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+);
 
-const mockChallenges = {
-  Web: [
-    {
-      id: 1,
-      title: "Warm Up",
-      points: 100,
-      description: "Basic web challenge to get started.",
-      hints: ["Check the source code.", "Look for hidden comments."],
-      flag: "warmup123",
-      completedBy: [
-        { username: "alice", points: 100 },
-        { username: "bob", points: 100 },
-      ],
-    },
-    {
-      id: 2,
-      title: "Cascade",
-      points: 100,
-      description: "CSS challenge for styling skills.",
-      hints: ["Inspect elements.", "Try different selectors."],
-      flag: "cascade456",
-      completedBy: [{ username: "charlie", points: 100 }],
-    },
-    {
-      id: 3,
-      title: "XSS Fun",
-      points: 150,
-      description: "Find the XSS vulnerability.",
-      hints: ["Input fields are key."],
-      flag: "xss789",
-      completedBy: [{ username: "dave", points: 150 }],
-    },
-  ],
-  Reversing: [
-    {
-      id: 4,
-      title: "Easy Crack",
-      points: 120,
-      description: "Reverse this binary.",
-      hints: ["Use strings command."],
-      flag: "crack123",
-      completedBy: [{ username: "alice", points: 120 }],
-    },
-    {
-      id: 5,
-      title: "Assembly Puzzle",
-      points: 180,
-      description: "Analyze the assembly code.",
-      hints: ["IDA or Ghidra helps."],
-      flag: "asm456",
-      completedBy: [{ username: "bob", points: 180 }],
-    },
-  ],
-  Crypto: [
-    {
-      id: 6,
-      title: "Caesar Salad",
-      points: 150,
-      description: "Decrypt the Caesar cipher.",
-      hints: ["Shift letters."],
-      flag: "caesar123",
-      completedBy: [{ username: "charlie", points: 150 }],
-    },
-    {
-      id: 7,
-      title: "RSA Fun",
-      points: 300,
-      description: "Factor the modulus.",
-      hints: ["Small primes."],
-      flag: "rsa456",
-      completedBy: [{ username: "dave", points: 300 }],
-    },
-  ],
-  Misc: [
-    {
-      id: 8,
-      title: "Stego Challenge",
-      points: 200,
-      description: "Find the hidden message in the image.",
-      hints: ["Check LSB."],
-      flag: "stego123",
-      completedBy: [],
-    },
-    {
-      id: 9,
-      title: "Logic Puzzle",
-      points: 100,
-      description: "Solve the logic riddle.",
-      hints: ["Think step by step."],
-      flag: "logic456",
-      completedBy: [],
-    },
-  ],
-};
+const PlayIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <polygon points="5 3 19 12 5 21 5 3" />
+  </svg>
+);
+
+const StopIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+  </svg>
+);
+
+const ExternalLinkIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: "4px" }}>
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    <polyline points="15 3 21 3 21 9" />
+    <line x1="10" y1="14" x2="21" y2="3" />
+  </svg>
+);
 
 // ==================== Challenge Card ====================
-function ChallengeCard({ challenge, onClick, username }) {
-  const completedSet = new Set(challenge.completedBy.map((u) => u.username));
-  const isCompleted = completedSet.has(username);
+function ChallengeCard({ challenge, onClick, userSolvedIds = [] }) {
+  // If userSolvedIds contains this challenge ID, mark as completed
+  const isCompleted = userSolvedIds.includes(challenge.id);
 
   return (
     <div
@@ -115,7 +44,12 @@ function ChallengeCard({ challenge, onClick, username }) {
       onClick={() => onClick(challenge)}
       title={isCompleted ? "You completed this challenge" : ""}
     >
-      <div className="challenge-title gradient-text">{challenge.title}</div>
+      <div className="card-header">
+        <div className="challenge-title gradient-text">{challenge.name}</div>
+        <div className="challenge-icon">
+            {challenge.is_download ? <DownloadIcon /> : <PlayIcon />}
+        </div>
+      </div>
       <div className="challenge-points">{challenge.points} pts</div>
     </div>
   );
@@ -124,257 +58,283 @@ function ChallengeCard({ challenge, onClick, username }) {
 // ==================== Challenge Modal ====================
 function ChallengeModal({ challenge, onClose, username }) {
   const [flag, setFlag] = useState("");
-  const [flagFeedback, setFlagFeedback] = useState("");
-  const [flagStatus, setFlagStatus] = useState(""); // "success" | "error"
-  const [instanceLink, setInstanceLink] = useState("");
-  const [timer, setTimer] = useState(60 * 60); // 1 hour
-  const [instanceRunning, setInstanceRunning] = useState(false);
-  const [instanceFeedback, setInstanceFeedback] = useState("");
-  const timerRef = useRef();
+  const [feedback, setFeedback] = useState({ msg: "", type: "" });
 
-  const userTeam = teams.find((t) => t.users.includes(username));
+  // Container State
+  const [instance, setInstance] = useState(null); // { host, port, remaining_seconds }
+  const [isLoading, setIsLoading] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(0);
+  const timerRef = useRef(null);
 
-  // Timer effect
+  // 1. Check if instance is already running when modal opens
   useEffect(() => {
-    if (instanceRunning) {
-      timerRef.current = setInterval(
-        () => setTimer((prev) => (prev > 0 ? prev - 1 : 0)),
-        1000
-      );
+    if (!challenge.is_download && !DEMO_MODE) {
+      checkInstanceStatus();
+    }
+  }, [challenge.id]);
+
+  // 2. Timer Countdown Logic
+  useEffect(() => {
+    if (instance && timeLeft > 0) {
+      timerRef.current = setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+             clearInterval(timerRef.current);
+             checkInstanceStatus(); // Sync with backend on expiry
+             return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      clearInterval(timerRef.current);
     }
     return () => clearInterval(timerRef.current);
-  }, [instanceRunning]);
+  }, [instance, timeLeft]);
+
+  const checkInstanceStatus = async () => {
+    try {
+      const res = await api.get(`/challenges/${challenge.id}/instance`);
+      if (res.data.is_running && res.data.connection) {
+        setInstance(res.data.connection);
+        setTimeLeft(res.data.connection.remaining_seconds);
+      } else {
+        setInstance(null);
+      }
+    } catch (err) {
+      console.error("Failed to check instance", err);
+    }
+  };
+
+  const handleSpawn = async () => {
+    setIsLoading(true);
+    setFeedback({ msg: "", type: "" });
+    try {
+      const res = await api.post(`/challenges/${challenge.id}/spawn`);
+      setInstance(res.data);
+      setTimeLeft(res.data.remaining_seconds);
+
+      // TODO: Auto-redirect immediately if desired
+      // const url = `http://${res.data.host}:${res.data.port}`;
+      // window.open(url, '_blank');
+
+    } catch (err) {
+      setFeedback({ msg: err.response?.data?.detail || "Failed to spawn instance", type: "error" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleTerminate = async () => {
+    setIsLoading(true);
+    try {
+      await api.post(`/challenges/${challenge.id}/terminate`);
+      setInstance(null);
+      setTimeLeft(0);
+    } catch (err) {
+      console.error("Failed to stop", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    try {
+      // Direct browser navigation to download endpoint
+      // Using window.open triggers the download in a new tab (which immediately closes)
+      const downloadUrl = `${api.defaults.baseURL || "/api/v1"}/challenges/${challenge.id}/download`;
+      window.open(downloadUrl, "_blank");
+    } catch (err) {
+      setFeedback({ msg: "Download failed.", type: "error" });
+    }
+  };
+
+  const handleSubmitFlag = async () => {
+    if (!username) {
+        setFeedback({ msg: "Login required.", type: "error" });
+        return;
+    }
+    try {
+      const res = await api.post(`/challenges/${challenge.id}/submit`, { flag });
+      setFeedback({ msg: res.data.message || "Correct!", type: "success" });
+    } catch (err) {
+      setFeedback({ msg: err.response?.data?.detail || "Incorrect Flag", type: "error" });
+    }
+  };
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins.toString().padStart(2, "0")}:${secs
-      .toString()
-      .padStart(2, "0")}`;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Instance management
-  const handleStartInstance = () => {
-    if (!username) {
-      setInstanceFeedback("You must be logged in to start an instance.");
-      return;
-    }
-    if (!userTeam) {
-      setInstanceFeedback("You must be in a team to start an instance.");
-      return;
-    }
-    const randomPort = Math.floor(3000 + Math.random() * 1000);
-    setInstanceLink(`https://challenge-instance.com/${challenge.id}:${randomPort}`);
-    setInstanceRunning(true);
-    setTimer(60 * 60);
-    setInstanceFeedback("Instance started! You have 60 minutes.");
-  };
-
-  const handleExtendExpiry = () => {
-    if (timer / 60 <= 15) {
-      setTimer(60 * 60);
-      setInstanceFeedback("Expiry extended! You now have 60 minutes.");
-    } else {
-      setInstanceFeedback("You can extend expiry only when 15 minutes or less are left.");
-    }
-  };
-
-  const handleStopInstance = () => {
-    setInstanceLink("");
-    setTimer(0);
-    setInstanceRunning(false);
-    setInstanceFeedback("Instance stopped.");
-  };
-
-  // Flag submission
-  const handleSubmitFlag = () => {
-    if (!username) {
-      setFlagFeedback("You must be logged in to submit a flag.");
-      setFlagStatus("error");
-      return;
-    }
-    if (!userTeam) {
-      setFlagFeedback("You must be in a team to submit a flag.");
-      setFlagStatus("error");
-      return;
-    }
-
-    if (flag === challenge.flag) {
-      if (!challenge.completedBy.some((u) => u.username === username)) {
-        challenge.completedBy.push({ username, points: challenge.points });
-      }
-      setFlagFeedback(`Correct! +${challenge.points} points`);
-      setFlagStatus("success");
-    } else {
-      setFlagFeedback("Red flag! Incorrect, try again!");
-      setFlagStatus("error");
-    }
-    setFlag("");
-  };
-
-  const instanceColorClass =
-    instanceFeedback.includes("started") || instanceFeedback.includes("extended")
-      ? "success"
-      : instanceFeedback.includes("cannot") || instanceFeedback.includes("must")
-      ? "error"
-      : "info";
+  // Construct connection URL
+  const connectionUrl = instance ? `http://${instance.host}:${instance.port}` : "#";
 
   return createPortal(
     <div className="challenge-modal-overlay" onClick={onClose}>
       <div className="challenge-modal animate-popup" onClick={(e) => e.stopPropagation()}>
-        <h2 className="gradient-text">{challenge.title}</h2>
-        <p className="challenge-points"><b>Points:</b> {challenge.points}</p>
-        <p className="challenge-description"><b>Description:</b> {challenge.description}</p>
-
-        {/* Hints */}
-        {challenge.hints.length > 0 && (
-          <div className="challenge-hints">
-            <p><b>Hints:</b></p>
-            {challenge.hints.map((hint, idx) => (
-              <p key={idx} className="hint-text">{hint}</p>
-            ))}
-          </div>
-        )}
-
-        {/* Instance Section */}
-        <div className="instance-section">
-          {instanceRunning && <h4>Instance Running:</h4>}
-          {instanceLink ? (
-            <div className="instance-info">
-              <p>Time Left: <b>{formatTime(timer)}</b></p>
-              <a href={instanceLink} target="_blank" rel="noopener noreferrer" className="instance-link">Go to Instance</a>
-              <div className="instance-buttons" style={{ marginTop: "6px" }}>
-                <button className="gradient-btn small-btn" onClick={handleExtendExpiry}>Extend Expiry</button>
-                <button className="gradient-btn small-btn" style={{ marginLeft: "6px" }} onClick={handleStopInstance}>Stop Instance</button>
-              </div>
-            </div>
-          ) : (
-            <button className="gradient-btn" onClick={handleStartInstance}>Start Instance</button>
-          )}
-          {instanceFeedback && <p className={`feedback-message ${instanceColorClass}`}>{instanceFeedback}</p>}
+        <div className="modal-header">
+            <h2 className="gradient-text">{challenge.name}</h2>
+            <span className="badge difficulty-badge">{challenge.difficulty}</span>
         </div>
 
-        {/* Flag Submission */}
-        <div className="flag-container" style={{ marginTop: "12px" }}>
+        <p className="challenge-description">{challenge.description}</p>
+
+        {challenge.hint && (
+            <div className="challenge-hint">
+                <strong>Hint:</strong> {challenge.hint}
+            </div>
+        )}
+
+        {/* --- DYNAMIC ACTION SECTION --- */}
+        <div className="action-section">
+            {challenge.is_download ? (
+                // === DOWNLOADABLE CHALLENGE ===
+                <button className="gradient-btn action-btn" onClick={handleDownload}>
+                    <DownloadIcon /> Download Files
+                </button>
+            ) : (
+                // === CONTAINER CHALLENGE ===
+                <div className="container-controls">
+                    {!instance ? (
+                        <button
+                            className="gradient-btn action-btn"
+                            onClick={handleSpawn}
+                            disabled={isLoading}
+                        >
+                            {isLoading ? "Spawning..." : <><PlayIcon /> Start Instance</>}
+                        </button>
+                    ) : (
+                        <div className="instance-active-panel">
+                            <div className="timer-display">
+                                Time Left: <span>{formatTime(timeLeft)}</span>
+                            </div>
+
+                            <div className="instance-actions">
+                                <a
+                                    href={connectionUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="gradient-btn link-btn"
+                                >
+                                    Open Challenge <ExternalLinkIcon />
+                                </a>
+
+                                <button
+                                    className="stop-btn"
+                                    onClick={handleTerminate}
+                                    disabled={isLoading}
+                                    title="Stop Instance"
+                                >
+                                    <StopIcon />
+                                </button>
+                            </div>
+                            <div className="connection-details">
+                                Host: {instance.host} <br/> Port: {instance.port}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+
+        {/* --- FLAG SUBMISSION --- */}
+        <div className="flag-section">
           <input
             type="text"
-            placeholder="Enter flag"
+            placeholder="CTF{...}"
             value={flag}
             onChange={(e) => setFlag(e.target.value)}
             className="flag-input"
           />
-          <button className="submit-flag gradient-btn" onClick={handleSubmitFlag}>Submit</button>
-          {flagFeedback && <p className={`feedback-message ${flagStatus}`}>{flagFeedback}</p>}
+          <button className="gradient-btn" onClick={handleSubmitFlag}>Submit Flag</button>
         </div>
 
-        {/* Completed Users */}
-        <div className="completed-users-section" style={{ marginTop: "12px" }}>
-          <h4>Completed by:</h4>
-          {challenge.completedBy.length > 0 ? (
-            <ul className="completed-users">
-              {challenge.completedBy.map((u) => (
-                <li key={u.username}>
-                  <Link to={`/profile/${u.username}`} className="username-link">
-                    {u.username}
-                  </Link>{" "}
-                  - {u.points} pts
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>No one has completed this yet.</p>
-          )}
-        </div>
+        {feedback.msg && (
+            <p className={`feedback-message ${feedback.type}`}>{feedback.msg}</p>
+        )}
 
-        <button className="submit-flag gradient-btn" style={{ marginTop: "12px" }} onClick={onClose}>Close</button>
+        <button className="close-btn-text" onClick={onClose}>Close</button>
       </div>
     </div>,
     document.body
   );
 }
 
-// ==================== Main Challenge Page ====================
-export default function ChallengePage() {
+// ==================== Main Page ====================
+export default function ChallengesPage() {
+  const [challenges, setChallenges] = useState({}); // Grouped by Difficulty
   const [selectedChallenge, setSelectedChallenge] = useState(null);
   const [username, setUsername] = useState("");
-  const [challenges, setChallenges] = useState({});
+  const [userSolvedIds, setUserSolvedIds] = useState([]); // Array of IDs user has solved
 
   useEffect(() => {
-    if (DEMO_MODE) {
-      // ===== DEMO MODE =====
-      try {
-        const storedUser = JSON.parse(localStorage.getItem("loggedInUser"));
-        if (storedUser?.username) setUsername(storedUser.username);
-      } catch (err) {
-        console.warn("Failed to read loggedInUser from localStorage:", err);
-      }
-      setChallenges(mockChallenges);
-    } else {
-      // ===== PRODUCTION MODE =====
-      (async () => {
-        try {
-          // Get authenticated user, and also keep track if he has completed the challenge, he cannot submit completed challenge
-          const userRes = await fetch("/api/auth/status", {
-            method: "GET",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-          });
-          if (userRes.ok) {
-            const data = await userRes.json();
-            if (data?.user?.username) setUsername(data.user.username);
-          }
-
-          // Fetch real challenges
-          const challRes = await fetch("/api/challenges", {
-            method: "GET",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-          });
-          if (challRes.ok) {
-            const challData = await challRes.json();
-            setChallenges(challData);
-          }
-        } catch (err) {
-          console.error("Error fetching data:", err);
-        }
-      })();
-    }
+    loadData();
   }, []);
 
-  return (
-    <div
-      className="challenge-page"
-      style={{
-        backgroundImage:
-          'url("https://www.isep.fr/app/uploads/2024/10/Bandeau-Pourquoi-Integrer-lIsep.jpg")',
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
-        position: "relative",
-        minHeight: "100vh",
-      }}
-    >
-      <div style={{ position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 0 }}></div>
+  const loadData = async () => {
+    if (DEMO_MODE) {
+       // ... (Keep existing mock logic if needed)
+       return;
+    }
 
-      <div className="challenge-container">
-        {Object.entries(challenges).map(([category, list]) => (
-          <div key={category} className="challenge-section">
-            <h2 className="challenge-category gradient-text">{category}</h2>
-            <div className="challenge-grid">
-              {list.map((ch) => (
-                <ChallengeCard
-                  key={ch.id}
-                  challenge={ch}
-                  onClick={setSelectedChallenge}
-                  username={username}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
+    try {
+        // 1. Get User Profile (to know username and completed challenges)
+        const userRes = await api.get("/users/me");
+        setUsername(userRes.data.username);
+        // Assuming userRes.data.solved_challenges is an array of objects or IDs
+        // If backend returns list of challenge objects, map to IDs:
+        const solved = userRes.data.solved_challenges?.map(c => c.id || c) || [];
+        setUserSolvedIds(solved);
+
+        // 2. Get All Challenges
+        const chalRes = await api.get("/challenges");
+
+        // 3. Group by Difficulty (since 'category' field is missing in schema)
+        const grouped = chalRes.data.reduce((acc, curr) => {
+            const group = curr.difficulty || "Misc";
+            if (!acc[group]) acc[group] = [];
+            acc[group].push(curr);
+            return acc;
+        }, {});
+
+        setChallenges(grouped);
+
+    } catch (err) {
+        console.error("Failed to load challenges", err);
+    }
+  };
+
+  return (
+    <div className="challenges-page-container">
+      <div className="challenges-header">
+        <h1>Challenges</h1>
+        <p>Select a challenge to begin.</p>
       </div>
 
-      {/* Modal */}
+      <div className="challenges-grid-wrapper">
+        {Object.keys(challenges).length === 0 ? (
+            <p className="no-data">Loading challenges...</p>
+        ) : (
+            Object.entries(challenges).map(([difficulty, list]) => (
+            <div key={difficulty} className="challenge-section">
+                <h2 className="section-title">{difficulty}</h2>
+                <div className="challenge-grid">
+                {list.map((ch) => (
+                    <ChallengeCard
+                        key={ch.id}
+                        challenge={ch}
+                        onClick={setSelectedChallenge}
+                        userSolvedIds={userSolvedIds}
+                    />
+                ))}
+                </div>
+            </div>
+            ))
+        )}
+      </div>
+
       {selectedChallenge && (
         <ChallengeModal
           challenge={selectedChallenge}

@@ -8,20 +8,23 @@
 # - *POST /api/v1/{id}/ctf-start* – start CTF (admin only; sets ctfActive = true and timer)
 # - *POST /api/v1/{id}/ctf-stop* – stop CTF (admin only; sets ctfActive = false and timer)
 
+import os
 from datetime import datetime, timedelta, timezone
 
 import fastapi
 from fastapi import HTTPException, status
+from fastapi.responses import FileResponse
 from loguru import logger
 
 from app.backend.api.v1.deps import ChallengesRepositoryDep, CurrentAdminDep, CurrentUserDep, TeamsRepositoryDep
+from app.backend.db.models import ChallengeTable
 from app.backend.schema.challenges import ChallengeInResponse, CTFStartRequest, FlagSubmission
 from app.backend.schema.teams import TeamWithScoresInResponse
 
 router = fastapi.APIRouter(tags=["challenges"])
 
 
-def _construct_challenge_response(challenge) -> ChallengeInResponse:
+def _construct_challenge_response(challenge: ChallengeTable) -> ChallengeInResponse:
     return ChallengeInResponse(
         id=challenge.id,
         name=challenge.name,
@@ -32,7 +35,6 @@ def _construct_challenge_response(challenge) -> ChallengeInResponse:
         difficulty=getattr(challenge.difficulty, "value", str(challenge.difficulty)),
         points=challenge.points,
         created_at=challenge.created_at,
-        valid_until=challenge.valid_until,
     )
 
 
@@ -176,3 +178,33 @@ async def stop_ctf(
     await challenge_repo.set_ctf_state(False, None, None, None)
     logger.info(f"CTF stopped by {getattr(current_admin, 'username', None)} for challenge {challenge_id}")
     return {"message": "CTF stopped"}
+
+
+# ==========================================
+# DOWNLOADABLE CHALLENGE ENDPOINT
+# ==========================================
+@router.get("/{challenge_id}/download", response_class=FileResponse)
+async def download_challenge_file(
+    challenge_id: int,
+    current_user: CurrentUserDep,  # Access Control: Must be logged in
+    challenge_repo: ChallengesRepositoryDep,
+):
+    """
+    Serves the file if the challenge is marked as 'is_download'.
+    """
+    ch = await challenge_repo.read_challenge_by_id(challenge_id)
+    if not ch:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Challenge not found")
+
+    if not ch.is_download:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "This challenge is not a downloadable file.")
+
+    # Security check: Validate path exists and is safe
+    file_path = ch.path
+
+    if not os.path.exists(file_path):
+        logger.error(f"Challenge file missing at {file_path}")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Challenge file missing on server.")
+
+    filename = os.path.basename(file_path)
+    return FileResponse(path=file_path, filename=filename, media_type="application/octet-stream")

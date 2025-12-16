@@ -92,15 +92,46 @@ async def seed_db():
 
         session.add_all(user_team_assocs)
 
+        try:
+            await session.commit()
+            print("Seed data inserted successfully.")
+        except IntegrityError as e:
+            await session.rollback()
+            print(f"Integrity error while inserting seed data: {e}")
+
+
+async def add_test_challenge():
+    async with AsyncSessionLocal() as session:
         # Add a single test challenge
         challenge = models.ChallengeTable(
-            name="sample-challenge",
-            path="/challenges/sample",
-            description="A test challenge for development",
+            name="Hidden Cat",
+            path="/project/challenges/deployment/cat.zip",
+            description="A seemingly normal cat image hides a flag inside the file. Inspect the file contents (especially the end) to recover the flag in the format flag{...}.",
             hint="Try the obvious input",
             is_download=True,
             difficulty=models.DifficultyEnum.EASY,
             points=100,
+            flag="abctest",
+            ctf_active=False,
+        )
+
+        session.add(challenge)
+
+        try:
+            await session.commit()
+            print("Seed data inserted successfully.")
+        except IntegrityError as e:
+            await session.rollback()
+            print(f"Integrity error while inserting seed data: {e}")
+
+        challenge = models.ChallengeTable(
+            name="Lorem Ipsum",
+            path="/",
+            description="LoremIpsum",
+            hint="Try the obvious input",
+            is_download=False,
+            difficulty=models.DifficultyEnum.HARD,
+            points=250,
             flag=None,
             ctf_active=False,
         )
@@ -120,6 +151,7 @@ async def init_db():
     print("Ensuring schema via Alembic and seeding database with mock data...")
     # run Alembic migrations to create schema if not present
     await seed_db()
+    await add_test_challenge()
 
 
 if __name__ == "__main__":
