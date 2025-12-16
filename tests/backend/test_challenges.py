@@ -1,7 +1,7 @@
 import pytest
 
 from app.backend.db.models import DifficultyEnum
-from app.backend.tests.utils import authenticate_client, create_admin_user, create_challenge, login_user, register_user
+from tests.backend.utils import authenticate_client, create_admin_user, create_challenge, login_user, register_user
 
 
 @pytest.mark.asyncio

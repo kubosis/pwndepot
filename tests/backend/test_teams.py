@@ -2,7 +2,7 @@ import urllib.parse
 
 import pytest
 
-from app.backend.tests.utils import authenticate_client, register_user
+from tests.backend.utils import authenticate_client, register_user
 
 
 def _extract_token(invite_url: str) -> str:

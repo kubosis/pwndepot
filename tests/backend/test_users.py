@@ -1,6 +1,6 @@
 import pytest
 
-from app.backend.tests.utils import authenticate_client, create_admin_user, register_user
+from tests.backend.utils import authenticate_client, create_admin_user, register_user
 
 
 @pytest.mark.asyncio
