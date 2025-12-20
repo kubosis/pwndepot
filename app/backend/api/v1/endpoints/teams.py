@@ -141,7 +141,7 @@ async def change_password(
     account_password: str = Body(...),
     current_user: CurrentUserDep = None,
     team_repo: TeamsRepositoryDep = None,
-    account_repo: UserRepositoryDep = None,  # <-- MUSI BYĆ!
+    account_repo: UserRepositoryDep = None,
 ):
     # verify account password
     if not account_repo.pwd_manager.verify_password(account_password, current_user.hashed_password):

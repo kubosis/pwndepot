@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 from typing import ClassVar
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, func
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,21 +23,24 @@ class UserTable(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    username: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
-    email: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    username: Mapped[str] = mapped_column(String(64), nullable=False)
+    email: Mapped[str] = mapped_column(String(128), nullable=False)
     role: Mapped[RoleEnum] = mapped_column(
         Enum(RoleEnum, name="role_enum", native_enum=False),
         nullable=False,
         default=RoleEnum.USER,
     )
+    verification_token = mapped_column(String(128), nullable=True)
+    verification_token_expires_at = mapped_column(DateTime(timezone=True), nullable=True)
 
     hashed_password: Mapped[str] = mapped_column(String(1024), nullable=False)
     is_email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     status: Mapped[StatusEnum] = mapped_column(
-        Enum(StatusEnum, name="role_enum", native_enum=False),
+        Enum(StatusEnum, name="status_enum", native_enum=False),
         nullable=False,
         default=StatusEnum.ACTIVE,
     )
@@ -58,6 +61,20 @@ class UserTable(Base):
     teams: AssociationProxy[list["TeamTable"]] = association_proxy("team_associations", "team")
     completed_challenges: AssociationProxy[list["ChallengeTable"]] = association_proxy(
         "challenge_associations", "challenge"
+    )
+
+    __table_args__ = (
+        # username case-insensitive UNIQUE
+        Index(
+            "uq_users_username_lower",
+            func.lower(username),
+            unique=True,
+        ),
+        Index(
+            "uq_users_email_lower",
+            func.lower(email),
+            unique=True,
+        ),
     )
 
     __mapper_args__: ClassVar[dict] = {"eager_defaults": True}

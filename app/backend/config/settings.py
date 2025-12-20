@@ -67,6 +67,13 @@ class BackendBaseSettings(BaseSettings):
     RATE_LIMIT_PER_MINUTE: int = decouple.config("RATE_LIMIT_PER_MINUTE", cast=int)
 
     # -----------------------------
+    # REDIS
+    # -----------------------------
+
+    REDIS_URL: str = "redis://redis:6379/0"
+    ADMIN_MFA_TTL_SECONDS: int = 60
+
+    # -----------------------------
     # SERVER SETTINGS (UVICORN)
     # -----------------------------
     UVICORN_SERVER_HOST: str = decouple.config("UVICORN_SERVER_HOST")
@@ -96,7 +103,7 @@ class BackendBaseSettings(BaseSettings):
     # -----------------------------
     SMTP_HOST: str = decouple.config("SMTP_HOST")
     SMTP_PORT: int = decouple.config("SMTP_PORT", cast=int, default=587)
-    SMTP_USE_TLS: bool = decouple.config("SMTP_USE_TLS", cast=bool, default=True)
+    SMTP_USE_TLS: bool = decouple.config("SMTP_USE_TLS", cast=bool, default=False)
 
     SMTP_USERNAME: str = decouple.config("SMTP_USERNAME")
     SMTP_PASSWORD: str = decouple.config("SMTP_PASSWORD")

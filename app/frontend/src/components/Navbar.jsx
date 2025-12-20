@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import logo from "../assets/logo.jpg";
+import logo from "../assets/logo.png";
 import "../index.css";
 import { DEMO_MODE } from "../config/demo"; 
 import { api } from "../config/api";
@@ -30,18 +30,19 @@ export default function Navbar({ ctfActive, loggedInUser, setLoggedInUser}) {
   };
 
   return (
-    <nav className="fixed top-0 left-0 w-full z-50 bg-gray-900 bg-opacity-80 backdrop-blur-sm flex justify-between items-center h-16 px-6">
+    <nav className="fixed top-0 left-0 w-full z-50 bg-gray-900 bg-opacity-80 backdrop-blur-sm flex justify-between items-center h-16 px-8">
       {/* Left: Logo + title */}
-      <div className="flex items-center">
+      <div className="flex items-center translate-y-[2px] translate-x-[2px]">
         <Link to="/" className="navbar-logo">
           <img
             src={logo}
-            alt="CTF logo"
-            className="w-12 h-12 rounded-full object-cover transform transition duration-200 hover:scale-110 hover:shadow-lg"
+            alt="PwnDepot logo"
+            className="h-12 w-auto object-contain transition-transform duration-200 hover:scale-110"
+            style={{ imageRendering: "pixelated" }}
           />
         </Link>
-        <span className="navbar-header ml-2 font-semibold text-white">
-          ISEP CTF Platform
+        <span className="navbar-header ml-2 font-semibold text-white translate-y-[-1px] translate-x-[-2px]">
+          PwnDepot
         </span>
       </div>
 

@@ -7,6 +7,7 @@ export default function MfaVerify({ setLoggedInUser }) {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
 
   const handleVerify = async (e) => {
     e.preventDefault();
@@ -19,9 +20,16 @@ export default function MfaVerify({ setLoggedInUser }) {
 
       // 2. If successful, fetch full user profile
       const profileRes = await api.get("/users/me");
-      setLoggedInUser(profileRes.data);
 
-      navigate("/"); // Go to dashboard
+      // 3. Show success feedback
+      setSuccessMessage("MFA verification successful. Logging you in...");
+
+      // 4. Delay redirect (UX)
+      setTimeout(() => {
+        setLoggedInUser(profileRes.data);
+        navigate("/");
+      }, 1200);
+      
     } catch (err) {
       console.error(err);
       setError("Invalid code. Please try again.");
@@ -55,6 +63,7 @@ export default function MfaVerify({ setLoggedInUser }) {
         </form>
 
         {error && <p className="error-text fade-in">{error}</p>}
+        {successMessage && <p className="success-text fade-in">{successMessage}</p>}
       </div>
     </div>
   );

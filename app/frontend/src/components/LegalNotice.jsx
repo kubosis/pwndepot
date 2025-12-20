@@ -8,7 +8,7 @@ function LegalNotice() {
       <p><strong>Effective Date:</strong> 22nd of January, 2026</p>
 
       <p>
-        In accordance with French law, the following legal notice applies to ISEP CTF Platform:
+        In accordance with French law, the following legal notice applies to PwnDepot:
       </p>
 
       <h2>Publisher</h2>
