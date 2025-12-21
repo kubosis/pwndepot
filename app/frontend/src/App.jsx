@@ -17,7 +17,7 @@ import JoinTeam from "./components/JoinTeam";
 import AdminPage from "./components/AdminPage";
 import NotFound from "./components/NotFound";
 import TeamPage from "./components/TeamPage";
-import ChallengesPage from "./components/ChallengesPage";
+import ChallengesPage from "./components/challengespage";
 import Contact from "./components/Contact";
 import DemoBanner from "./components/DemoBanner";
 import CaptainPanel from "./components/CaptainPanel";
