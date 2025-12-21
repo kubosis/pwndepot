@@ -17,7 +17,7 @@ import JoinTeam from "./components/JoinTeam";
 import AdminPage from "./components/AdminPage";
 import NotFound from "./components/NotFound";
 import TeamPage from "./components/TeamPage";
-import ChallengesPage from "./components/challengespage";
+import ChallengePage from "./components/challengespage";
 import Contact from "./components/Contact";
 import DemoBanner from "./components/DemoBanner";
 import CaptainPanel from "./components/CaptainPanel";
@@ -206,7 +206,7 @@ function AppContent() {
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/legal-notice" element={<LegalNotice />} />
           <Route path="/contact" element={<Contact />} />
-          <Route path="/challenges" element={<ChallengesPage />} />
+          <Route path="/challenges" element={<ChallengePage />} />
           <Route path="/join-team" element={<JoinTeam />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
 
