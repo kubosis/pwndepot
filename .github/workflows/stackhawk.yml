@@ -1,0 +1,54 @@
+name: StackHawk API + DAST Security Scan
+
+on:
+  push:
+    branches: [ "main", "devel" ]
+  pull_request:
+    branches: [ "main", "devel" ]
+
+jobs:
+  stackhawk-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Start application stack
+        run: |
+          docker compose -f docker-compose.ci.yml up -d --build
+          sleep 15
+
+      - name: Wait for app
+        run: |
+          for i in {1..30}; do
+            if curl -sf http://localhost/api/openapi.json > /dev/null; then
+              echo "App is ready"
+              exit 0
+            fi
+            echo "Waiting for app..."
+            sleep 2
+          done
+          echo "App did not start in time"
+          exit 1
+
+      - name: Run StackHawk Scan
+        uses: stackhawk/hawkscan-action@v2
+        with:
+          apiKey: ${{ secrets.STACKHAWK_API_KEY }}
+          configurationFiles: stackhawk.yml
+          failOnSeverity: medium
+
+      - name: Dump Docker logs (on failure)
+        if: failure()
+        run: docker compose -f docker-compose.ci.yml logs
+
+      - name: Stop containers
+        if: always()
+        run: docker compose -f docker-compose.ci.yml down -v

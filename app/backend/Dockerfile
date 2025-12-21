@@ -13,7 +13,7 @@ ENV RUNNING_IN_DOCKER=1
 
 WORKDIR /project
 
-RUN apt-get update && apt-get install -y libpq-dev build-essential
+RUN apt-get update && apt-get install -y libpq-dev postgresql-client build-essential && rm -rf /var/lib/apt/lists/*
 
 COPY app/backend/pyproject.toml app/backend/uv.lock ./
 RUN uv sync --frozen --no-install-project --no-dev
@@ -23,7 +23,11 @@ COPY assets/pwndepot_standard.png /project/assets/pwndepot_standard.png
 
 ENV PATH="/project/.venv/bin:$PATH"
 
+RUN addgroup --system app && adduser --system --ingroup app appuser && \
+    chown -R appuser:app /project
+
 EXPOSE 8000
 
+USER appuser
 
 CMD ["uvicorn", "app.backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,37 @@
+app:
+  applicationId: 33d2f6d3-f04c-41c4-ab2a-afe320086535
+  env: ci
+  host: http://localhost
+
+  # OpenAPI
+  openApiConf:
+    path: /api/openapi.json
+
+  authentication:
+    usernamePassword:
+      loginPath: /api/v1/users/login
+      type: FORM
+      usernameField: username
+      passwordField: password
+      scanUsername: testuser1@example.com
+      scanPassword: password123
+
+    cookieAuthorization:
+      cookieNames:
+        - access_token
+
+    testPath:
+      path: /api/v1/users/me
+      success: ".*200.*"
+
+    loggedInIndicator: "HTTP/.*200"
+    loggedOutIndicator: "HTTP/.*401|HTTP/.*403"
+
+hawk:
+  failureThreshold: medium
+
+  spider:
+    base: false
+  scan:
+    maxDurationMinutes: 10
+    concurrentRequests: 25

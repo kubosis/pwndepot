@@ -43,7 +43,7 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = settings.SQLALCHEMY_DATABASE_URL
+    url = settings.SQLALCHEMY_DATABASE_SYNC_URL
     context.configure(
         url=url,
         target_metadata=target_metadata,

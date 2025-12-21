@@ -1,11 +1,8 @@
-import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, Path(__file__).absolute().parent.parent.parent.parent.__str__())
 
-if os.getenv("SQLALCHEMY_DATABASE_URL") == "":
-    os.environ["SQLALCHEMY_DATABASE_URL"] = "sqlite+aiosqlite:///./app/backend/database.db"
 
 import asyncio
 import sys
@@ -56,6 +53,7 @@ async def seed_db():
                     email=f"testuser{i}@example.com",
                     role=models.RoleEnum.USER,
                     hashed_password=pwd_mgr.hash_password("password123"),
+                    is_email_verified=True,
                 )
             )
 

@@ -15,6 +15,10 @@ SMTP_RETRY_DELAY_SECONDS = 2
 
 
 def send_email(msg: EmailMessage) -> bool:
+    # CI / DEV without SMTP - no-op
+    if not settings.SMTP_HOST:
+        logging.info("Email sending skipped (SMTP disabled)")
+        return True
     for attempt in range(1, SMTP_MAX_RETRIES + 1):
         try:
             with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10) as server:

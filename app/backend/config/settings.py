@@ -28,40 +28,37 @@ class BackendBaseSettings(BaseSettings):
     # ENVIRONMENT MODE (dev / prod)
     # -----------------------------
     ENV: str = decouple.config("ENV", default="dev").lower()
-    assert ENV in ["dev", "prod"], f"Error: Unknown ENV={ENV} setting, Aborting Server"
-    DEBUG: bool = ENV == "dev"
+    assert ENV in ["dev", "ci", "prod"], f"Error: Unknown ENV={ENV} setting, Aborting Server"
+    DEBUG: bool = ENV in ("dev", "ci")
 
     # -----------------------------
     # SQLALCHEMY CONNECTION STRINGS
     # -----------------------------
-    # Database connection URLs (the .env in this project defines separate vars for PROD/DEV)
     SQLALCHEMY_POSTGRE_ASYNC_URL: str | None = decouple.config("SQLALCHEMY_POSTGRE_ASYNC_URL", default=None)
     SQLALCHEMY_POSTGRE_SYNC_URL: str | None = decouple.config("SQLALCHEMY_POSTGRE_SYNC_URL", default=None)
-    SQLALCHEMY_SQLLITE_ASYNC_URL: str | None = decouple.config("SQLALCHEMY_SQLLITE_ASYNC_URL", default=None)
-    SQLALCHEMY_SQLLITE_SYNC_URL: str | None = decouple.config("SQLALCHEMY_SQLLITE_SYNC_URL", default=None)
 
     @property
     def SQLALCHEMY_DATABASE_ASYNC_URL(self) -> str:
         # Async URL used by the application (choose based on ENV)
-        if self.ENV and self.ENV.upper() == "PROD":
+        if self.ENV == "prod":
             if self.SQLALCHEMY_POSTGRE_ASYNC_URL:
                 return self.SQLALCHEMY_POSTGRE_ASYNC_URL
             raise ValueError("Production async DB URL (SQLALCHEMY_POSTGRE_ASYNC_URL) is not configured")
-        # default to sqlite async URL for dev
-        if self.SQLALCHEMY_SQLLITE_ASYNC_URL:
-            return self.SQLALCHEMY_SQLLITE_ASYNC_URL
+        # default to postgre async URL for dev
+        if self.SQLALCHEMY_POSTGRE_ASYNC_URL:
+            return self.SQLALCHEMY_POSTGRE_ASYNC_URL
         raise ValueError("Async DB URL is not configured")
 
     @property
     def SQLALCHEMY_DATABASE_SYNC_URL(self) -> str:
         # Sync URL used by Alembic migrations
-        if self.ENV and self.ENV.upper() == "PROD":
+        if self.ENV == "prod":
             if self.SQLALCHEMY_POSTGRE_SYNC_URL:
                 return self.SQLALCHEMY_POSTGRE_SYNC_URL
             raise ValueError("Production sync DB URL (SQLALCHEMY_POSTGRE_SYNC_URL) is not configured")
-        # default to sqlite sync URL for dev
-        if self.SQLALCHEMY_SQLLITE_SYNC_URL:
-            return self.SQLALCHEMY_SQLLITE_SYNC_URL
+        # default to postgre sync URL for dev
+        if self.SQLALCHEMY_POSTGRE_SYNC_URL:
+            return self.SQLALCHEMY_POSTGRE_SYNC_URL
         raise ValueError("Sync DB URL is not configured")
 
     RATE_LIMIT_PER_MINUTE: int = decouple.config("RATE_LIMIT_PER_MINUTE", cast=int)
@@ -101,15 +98,15 @@ class BackendBaseSettings(BaseSettings):
     # -----------------------------
     # EMAIL / SMTP
     # -----------------------------
-    SMTP_HOST: str = decouple.config("SMTP_HOST")
+    SMTP_HOST: str | None = decouple.config("SMTP_HOST", default=None)
     SMTP_PORT: int = decouple.config("SMTP_PORT", cast=int, default=587)
     SMTP_USE_TLS: bool = decouple.config("SMTP_USE_TLS", cast=bool, default=False)
 
-    SMTP_USERNAME: str = decouple.config("SMTP_USERNAME")
-    SMTP_PASSWORD: str = decouple.config("SMTP_PASSWORD")
+    SMTP_USERNAME: str | None = decouple.config("SMTP_USERNAME", default=None)
+    SMTP_PASSWORD: str | None = decouple.config("SMTP_PASSWORD", default=None)
 
-    MAIL_FROM: str = decouple.config("MAIL_FROM")
-    CONTACT_RECEIVER_EMAIL: str = decouple.config("CONTACT_RECEIVER_EMAIL")
+    MAIL_FROM: str | None = decouple.config("MAIL_FROM", default="noreply@ci.local")
+    CONTACT_RECEIVER_EMAIL: str | None = decouple.config("CONTACT_RECEIVER_EMAIL", default="ci@local")
 
     # -----------------------------
     # JWT & SECURITY
@@ -126,11 +123,11 @@ class BackendBaseSettings(BaseSettings):
     API_V1_STR: str = API_PREFIX
 
     DOCS_URL: str | None = "/docs" if ENV == "dev" else None
-    OPENAPI_URL: str | None = "/openapi.json" if ENV == "dev" else None
+    OPENAPI_URL: str | None = "/openapi.json" if ENV in ("dev", "ci") else None
     REDOC_URL: str | None = "/redoc" if ENV == "dev" else None
     OPENAPI_PREFIX: str = ""
 
-    MFA_TOKEN_EXPIRATION_MINS: int = decouple.config("JWT_HASHING_PEPPER", default=2)
+    MFA_TOKEN_EXPIRATION_MINS: int = decouple.config("MFA_TOKEN_EXPIRATION_MINS", cast=int, default=2)
 
     # -----------------------------
     # COOKIE SECURITY (DEV vs PROD)
