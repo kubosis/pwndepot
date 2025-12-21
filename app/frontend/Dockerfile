@@ -4,14 +4,14 @@ FROM node:22-slim AS builder
 ENV VITE_API_URL=""
 ENV VITE_API_BASE_URL=""
 
-WORKDIR /project
-COPY app/frontend/package.json app/frontend/package-lock.json* /project/app/frontend/
+WORKDIR /project/app/frontend
+COPY app/frontend/package.json app/frontend/package-lock.json* ./
 
 WORKDIR /project/app/frontend
 
 RUN npm ci
 
-COPY app/frontend /project/app/frontend
+COPY app/frontend/ ./
 
 RUN npm run build
 
