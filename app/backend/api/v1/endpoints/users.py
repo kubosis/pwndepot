@@ -146,10 +146,13 @@ async def forgot_password(
     email = payload.email.lower()
     user = await account_repo.read_account_by_email(email)
 
-    # Always the same response (anti-enumeration)
-    if user:
-        token = create_password_reset_token(email)
-        background_tasks.add_task(send_reset_password_email, email, token)
+    # Always the same response (anti-enumeration), Admin accounts cannot use public password reset
+    if user and user.role == RoleEnum.ADMIN:
+        logger.warning(f"Password reset attempt for ADMIN account: {email}")
+        return {"message": "If the account exists, a reset link was sent"}
+
+    token = create_password_reset_token(email)
+    background_tasks.add_task(send_reset_password_email, email, token)
 
     return {"message": "If the account exists, a reset link was sent"}
 
@@ -171,6 +174,11 @@ async def reset_password(
     user = await account_repo.read_account_by_email(email)
     if not user:
         raise HTTPException(404, "User not found")
+
+    if user.role == RoleEnum.ADMIN:
+        logger.warning(f"Password reset blocked for ADMIN account: {email}")
+        # behave as if reset succeeded (anti-enumeration)
+        return {"message": "Password reset successful"}
 
     # Check if new password is same as old password
     if account_repo.pwd_manager.verify_password(
@@ -553,7 +561,7 @@ async def change_user_status(
         ok = await is_admin_mfa_valid(current_admin.id)
         if not ok:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
+                status_code=status.HTTP_403_FORBIDDEN,
                 detail={"code": "MFA_REQUIRED"},
             )
 
@@ -653,7 +661,7 @@ async def delete_user(
         ok = await is_admin_mfa_valid(current_admin.id)
         if not ok:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
+                status_code=status.HTTP_403_FORBIDDEN,
                 detail={"code": "MFA_REQUIRED"},
             )
 
