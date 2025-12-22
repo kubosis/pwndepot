@@ -11,9 +11,7 @@ export const FRONTEND_MODE =
 // -----------------------------
 export const api = axios.create({
   baseURL: `${API_BASE_URL}/api/v1`,
-  withCredentials: true, 
-  // prod - send cookies
-  // dev - do NOT send cookies
+  withCredentials: true,
 });
 
 // -----------------------------
@@ -22,15 +20,35 @@ export const api = axios.create({
 let isRefreshing = false;
 let refreshPromise = null;
 
+// ENDPOINTS, which can't trigger refresh
+const NO_REFRESH_ENDPOINTS = [
+  "/users/login",
+  "/users/register",
+  "/users/verify-email",
+  "/users/resend-verification",
+  "/users/auth/refresh",
+  "/users/logout",
+  "/users/forgot-password",
+  "/users/reset-password",
+  // ADMIN STEP-UP MFA 
+  "/mfa/admin/verify",
+];
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
+    const requestUrl = originalRequest?.url || "";
+
+    const shouldSkipRefresh = NO_REFRESH_ENDPOINTS.some((endpoint) =>
+      requestUrl.includes(endpoint)
+    );
+
     if (
       error.response?.status === 401 &&
       !originalRequest._retry &&
-      !originalRequest.url.includes("/users/auth/refresh")
+      !shouldSkipRefresh
     ) {
       originalRequest._retry = true;
 
@@ -54,4 +72,3 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-

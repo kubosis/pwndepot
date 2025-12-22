@@ -14,6 +14,7 @@ from app.backend.repository.base import BaseCRUDRepository
 from app.backend.repository.challenges import ChallengesCRUDRepository
 from app.backend.repository.teams import TeamsCRUDRepository
 from app.backend.repository.users import UserCRUDRepository
+from app.backend.utils.admin_mfa import is_admin_mfa_valid
 
 settings = get_settings()
 
@@ -88,10 +89,13 @@ async def get_current_user(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Unverified email.")
 
     # --- MFA LOGIC ---
-    # If the user has turned on MFA, but the token says they haven't passed it yet
+    # User has MFA enabled, but this access token is NOT MFA-verified (mfv=False).
+    # Block full authentication until /mfa/verify is completed.
     if user.mfa_enabled and not token_data.mfv:
-        logger.info("Error: MFA")
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "MFA required.", headers={"X-MFA-Required": "true"})
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "MFA_REQUIRED"},
+        )
     # ---------------------
 
     return user
@@ -142,6 +146,21 @@ async def get_current_admin(current_user: CurrentUserDep) -> UserTable:
 
 
 CurrentAdminDep = Annotated[UserTable, Depends(get_current_admin)]
+
+
+# ---------------------------
+# Admin MFA
+# ---------------------------
+async def RequireAdminMFA(current_admin: CurrentAdminDep):
+    if not current_admin.mfa_enabled:
+        return
+
+    ok = await is_admin_mfa_valid(current_admin.id)
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "MFA_REQUIRED", "message": "Admin MFA verification required"},
+        )
 
 
 # -----------------------------

@@ -32,7 +32,10 @@ export default function MfaSetup() {
         code: code
       });
       setStep("success");
-      setTimeout(() => navigate("/profile/me"), 2000); // Redirect back to profile
+      const profileRes = await api.get("/users/me");
+      const user = profileRes.data;
+      const { username } = user;
+      setTimeout(() => navigate(`/profile/${username}`), 1200); // Redirect back to profile
     } catch {
       setError("Invalid code. Please verify and try again.");
     }
@@ -52,9 +55,23 @@ export default function MfaSetup() {
             <div className="bg-white p-2 rounded">
               <QRCodeSVG value={secretData.otpauth_url} size={180} />
             </div>
+            {/* MANUAL SETUP FALLBACK */}
+            <div className="mt-3 text-sm text-gray-300 text-center">
+              <p className="mb-1">Can’t scan the QR code?</p>
+              <p className="text-xs text-gray-400">
+                Enter this key manually in your authenticator app:
+              </p>
+
+              <code
+                className="mt-2 block bg-gray-900 px-3 py-2 rounded tracking-widest text-white select-all"
+                title="Click to select"
+              >
+                {secretData.secret}
+              </code>
+            </div>
 
             <p className="text-sm text-gray-300 mt-4 text-center">
-              1. Scan this QR code with Google Authenticator.<br/>
+              1. Scan this QR code <b>or enter the key manually</b> in Google Authenticator.<br/>
               2. Enter the 6-digit code below to confirm.
             </p>
 
@@ -67,7 +84,7 @@ export default function MfaSetup() {
               className="mt-4 text-center tracking-widest"
             />
 
-            <button onClick={handleEnable} disabled={code.length < 6} className="mt-2">
+            <button onClick={handleEnable} disabled={code.length < 6 || step === "success"} className="mt-2">
               Enable MFA
             </button>
 
@@ -76,8 +93,8 @@ export default function MfaSetup() {
         )}
 
         {step === "success" && (
-          <div className="text-center">
-             <h3 className="text-green-500 font-bold text-xl mb-2">Success!</h3>
+          <div className="text-center fade-in">
+             <h3 className="success-text mb-2">Success!</h3>
              <p>MFA is now enabled on your account.</p>
           </div>
         )}

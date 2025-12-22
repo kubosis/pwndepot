@@ -5,10 +5,11 @@ from fastapi import APIRouter, HTTPException, Response, status
 
 from app.backend.api.v1.deps import AsyncSessionDep, CurrentUserDep, PartiallyLoggedInUserDep
 from app.backend.config.settings import get_settings
-from app.backend.db.models import RefreshTokenTable
+from app.backend.db.models import RefreshTokenTable, RoleEnum
 from app.backend.schema.mfa import MfaEnableRequest, MfaSetupResponse, MfaVerifyRequest
 from app.backend.security.refresh_tokens import generate_refresh_token
 from app.backend.security.tokens import create_jwt_access_token
+from app.backend.utils.admin_mfa import mark_admin_mfa_verified
 
 settings = get_settings()
 
@@ -103,3 +104,22 @@ async def verify_mfa_login(
     )
 
     return {"message": "MFA verification successful. Logged in."}
+
+
+@router.post("/admin/verify")
+async def verify_admin_mfa(
+    payload: MfaVerifyRequest,
+    user: PartiallyLoggedInUserDep,
+):
+    if user.role != RoleEnum.ADMIN:
+        raise HTTPException(403, "Admin only")
+
+    if not user.mfa_enabled:
+        raise HTTPException(400, "MFA not enabled")
+
+    totp = pyotp.TOTP(user.mfa_secret)
+    if not totp.verify(payload.code):
+        raise HTTPException(401, "Invalid MFA code")
+
+    await mark_admin_mfa_verified(user.id)
+    return {"message": "Admin MFA verified"}
