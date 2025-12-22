@@ -47,5 +47,19 @@ services:
       - backend
       - frontend
 
+  # mailhog:
+  #   image: mailhog/mailhog
+  #   container_name: mailhog
+  #   ports:
+  #     - "8025:8025"   # Web UI
+  #     - "1025:1025"   # SMTP
+  
+  redis:
+    image: redis:7
+    restart: always
+    ports:
+      - "6379:6379"
+
+
 volumes:
   postgres_data:

@@ -37,6 +37,7 @@ dependencies = [
     "alembic>=1.17.1",
     "aiosqlite>=0.21.0",
     "typer>=0.20.0",
+    "redis>=5.0",
     "Pyjwt>=2.10.1",
     "python-multipart>=0.0.20",
     "loguru>=0.7.3",

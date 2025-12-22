@@ -8,7 +8,7 @@ function TermsOfService() {
       <p><strong>Effective Date:</strong> 22nd of January, 2026</p>
 
       <p>
-        Welcome to the ISEP CTF Platform (the “Platform”), an educational Capture the Flag (CTF)
+        Welcome to the PwnDepot (the “Platform”), an educational Capture the Flag (CTF)
         platform operated by Paweł Jamroziak, Jakub Sukdol, Balázs Vincze, Tóth Bertalan, Shane Samuel PRADEEP and Navin Rajendran in affiliation
         with Institut supérieur d’électronique de Paris. By accessing or using the Platform, you agree to be
         bound by these Terms of Service (“Terms”). If you do not agree, do not use the Platform.

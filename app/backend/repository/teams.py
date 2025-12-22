@@ -168,6 +168,11 @@ class TeamsCRUDRepository(BaseCRUDRepository):
         if query.scalar():
             return None
 
+        # SAFETY CHECK: team size limit
+        if len(team.user_associations) >= 5:
+            logger.warning(f"Join blocked: team id={team.id} is full (members={len(team.user_associations)})")
+            return None
+
         new_assoc = UserInTeamTable(user_id=user.id, team_id=team.id)
         self.async_session.add(new_assoc)
         await self.async_session.commit()
