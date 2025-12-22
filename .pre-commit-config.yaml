@@ -26,3 +26,4 @@ repos:
     rev: v8.24.2
     hooks:
       - id: gitleaks
+        exclude: (^|/)tests/ # as there are hardcoded mock secrets

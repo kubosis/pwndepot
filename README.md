@@ -1,5 +1,8 @@
+![PwnDépôt Logo](assets/pwndepot_long.png)
+
 # 🚩 PwnDépôt
 
+[![Tests](https://github.com/kubosis/pwndepot/actions/workflows/tests.yml/badge.svg)](https://github.com/kubosis/pwndepot/actions/workflows/tests.yml)
 [![Build & Deploy](https://github.com/kubosis/pwndepot/actions/workflows/deploy.yml/badge.svg)](https://github.com/kubosis/pwndepot/actions/workflows/deploy.yml)
 [![Code Quality](https://github.com/kubosis/pwndepot/actions/workflows/quality.yml/badge.svg)](https://github.com/kubosis/pwndepot/actions/workflows/quality.yml)
 [![React Version](https://img.shields.io/badge/react-18.2.0-61dafb.svg?logo=react&logoColor=white)](https://reactjs.org/)
@@ -27,8 +30,10 @@ This project utilizes a fully automated **GitOps** workflow to ensure stability 
 ### Pipeline Artifacts
 * **Deployment Pipeline:** Handles Docker builds, registry pushes (GHCR), and manifest updates.
     * *Status:* [![Build & Deploy](https://github.com/kubosis/pwndepot/actions/workflows/deploy.yml/badge.svg)](https://github.com/kubosis/pwndepot/actions/workflows/deploy.yml)
-* **Quality Gate:** Runs linting (Ruff/ESLint), static analysis, and tests.
+* **Quality Gate:** Runs linting (Ruff/ESLint) and static analysis
     * *Status:* [![Code Quality](https://github.com/kubosis/pwndepot/actions/workflows/quality.yml/badge.svg)](https://github.com/kubosis/pwndepot/actions/workflows/quality.yml)
+* **Tests:** Runs backend and frontend tests
+    * *Status:* [![Tests](https://github.com/kubosis/pwndepot/actions/workflows/tests.yml/badge.svg)](https://github.com/kubosis/pwndepot/actions/workflows/tests.yml)
 
 ### 🏗️ The Workflow
 We use **GitHub Actions** for Continuous Integration and **ArgoCD** for Continuous Deployment.
