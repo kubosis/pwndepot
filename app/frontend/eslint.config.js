@@ -6,6 +6,8 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
   globalIgnores(['dist']),
+
+  // Frontend (browser)
   {
     files: ['**/*.{js,jsx}'],
     extends: [
@@ -14,16 +16,30 @@ export default defineConfig([
       reactRefresh.configs.vite,
     ],
     languageOptions: {
-      ecmaVersion: 2020,
+      ecmaVersion: 'latest',
       globals: globals.browser,
       parserOptions: {
-        ecmaVersion: 'latest',
         ecmaFeatures: { jsx: true },
         sourceType: 'module',
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      'no-unused-vars': [
+        'error',
+        {
+          varsIgnorePattern: '^_',
+          argsIgnorePattern: '^_',
+        },
+      ],
+      'react-hooks/exhaustive-deps': 'warn',
+    },
+  },
+
+  // Node / config files
+  {
+    files: ['**/*.config.js', 'tailwind.config.js'],
+    languageOptions: {
+      globals: globals.node,
     },
   },
 ])
