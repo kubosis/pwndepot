@@ -4,12 +4,12 @@ import { api } from "../config/api";
 import MFAInput from "../components/MFAInput";
 
 export default function AdminPage({ loggedInUser, setLoggedInUser}) {
-  const initialTime = 7 * 24 * 3600;
+  const INITIAL_TIME = 7 * 24 * 3600;
 
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [errorMessage, setErrorMessage] = useState("");
 
-  const [timeLeft, setTimeLeft] = useState(initialTime);
+  const [timeLeft, setTimeLeft] = useState(INITIAL_TIME);
   const [ctfRunning, setCtfRunning] = useState(false);
   const [blast, setBlast] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -37,17 +37,17 @@ export default function AdminPage({ loggedInUser, setLoggedInUser}) {
   const startCTF = async () => {
     if (DEMO_MODE) {
       setCtfRunning(true);
-      setTimeLeft(initialTime);
+      setTimeLeft(INITIAL_TIME);
       return;
     }
 
     try {
       await api.post("/challenges/1/ctf-start", {
-        duration_seconds: initialTime,
+        duration_seconds: INITIAL_TIME,
       });
 
         setCtfRunning(true);
-        setTimeLeft(initialTime);
+        setTimeLeft(INITIAL_TIME);
 
     } catch {
       setErrorMessage("Failed to start CTF");
@@ -57,7 +57,7 @@ export default function AdminPage({ loggedInUser, setLoggedInUser}) {
   const stopCTF = async () => {
     if (DEMO_MODE) {
       setCtfRunning(false);
-      setTimeLeft(initialTime);
+      setTimeLeft(INITIAL_TIME);
       return;
     }
 
@@ -65,7 +65,7 @@ export default function AdminPage({ loggedInUser, setLoggedInUser}) {
       await api.post("/challenges/1/ctf-stop");
 
       setCtfRunning(false);
-      setTimeLeft(initialTime);
+      setTimeLeft(INITIAL_TIME);
     } catch {
       setErrorMessage("Failed to stop CTF");
     }
@@ -164,7 +164,7 @@ export default function AdminPage({ loggedInUser, setLoggedInUser}) {
       loadUsers();
       setMfaSuccess("");
 
-    } catch (err) {
+    } catch (_err) {
       await minDelay(1200);
       setMfaRequired(false);
       setAdminMfaCode("");
@@ -221,7 +221,7 @@ export default function AdminPage({ loggedInUser, setLoggedInUser}) {
       setBlast(true);
       const t = setTimeout(() => {
         setBlast(false);
-        setTimeLeft(initialTime);
+        setTimeLeft(INITIAL_TIME);
       }, 1500);
       return () => clearTimeout(t);
     }
@@ -452,7 +452,7 @@ export default function AdminPage({ loggedInUser, setLoggedInUser}) {
                       setAdminMfaStep(false);
                       setDeleteError("");
                       setMfaSuccess("");
-                    } catch (err) {
+                    } catch (_err) {
                       if (err.response?.data?.detail?.code === "MFA_REQUIRED") {
                         setAdminMfaStep(true);
                         setDeleteError("");
@@ -647,7 +647,7 @@ export default function AdminPage({ loggedInUser, setLoggedInUser}) {
                       setAdminMfaStep(false);
                       setStatusError("");
                       setMfaSuccess("");
-                    } catch (err) {
+                    } catch (_err) {
                       if (err.response?.data?.detail?.code === "MFA_REQUIRED") {
                         setAdminMfaStep(true);
                         setStatusError("");

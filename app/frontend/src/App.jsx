@@ -37,9 +37,9 @@ function AppContent() {
   const location = useLocation();
 
   const [showBanner, setShowBanner] = useState(false);
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+  const [, setIsAdminLoggedIn] = useState(false);
   const [loggedInUser, setLoggedInUser] = useState(null);
-  const [ctfActive, setCtfActive] = useState(true);
+  const [ctfActive] = useState(true);
   const [authLoading, setAuthLoading] = useState(true);
 
   // Protected user route
@@ -84,7 +84,7 @@ function AppContent() {
             setIsAdminLoggedIn(true);
           }
         }
-      } catch {}
+      } catch {_err}
       setAuthLoading(false);
       return;
     }

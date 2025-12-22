@@ -157,7 +157,7 @@ export default function Contact() {
         setFormData({ username: "", email: "", message: "" });
       }
 
-    } catch (err) {
+    } catch (_err) {
       setFeedback({
         type: "error",
         text: "Something went wrong. Please try again later.",

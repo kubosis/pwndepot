@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { api } from "../config/api"; // Ensure this is configured for axios
@@ -92,7 +92,7 @@ function ChallengeModal({ challenge, onClose, username }) {
     return () => clearInterval(timerRef.current);
   }, [instance, timeLeft]);
 
-  const checkInstanceStatus = async () => {
+  const checkInstanceStatus = useCallback(async () => {
     try {
       const res = await api.get(`/challenges/${challenge.id}/instance`);
       if (res.data.is_running && res.data.connection) {
@@ -101,10 +101,10 @@ function ChallengeModal({ challenge, onClose, username }) {
       } else {
         setInstance(null);
       }
-    } catch (err) {
-      console.error("Failed to check instance", err);
+    } catch (_err) {
+      console.error("Failed to check instance", _err);
     }
-  };
+  }, [challenge.id]);
 
   const handleSpawn = async () => {
     setIsLoading(true);
@@ -118,7 +118,7 @@ function ChallengeModal({ challenge, onClose, username }) {
       // const url = `http://${res.data.host}:${res.data.port}`;
       // window.open(url, '_blank');
 
-    } catch (err) {
+    } catch (_err) {
       setFeedback({ msg: err.response?.data?.detail || "Failed to spawn instance", type: "error" });
     } finally {
       setIsLoading(false);
@@ -131,8 +131,8 @@ function ChallengeModal({ challenge, onClose, username }) {
       await api.post(`/challenges/${challenge.id}/terminate`);
       setInstance(null);
       setTimeLeft(0);
-    } catch (err) {
-      console.error("Failed to stop", err);
+    } catch (_err) {
+      console.error("Failed to stop", _err);
     } finally {
       setIsLoading(false);
     }
@@ -144,7 +144,7 @@ function ChallengeModal({ challenge, onClose, username }) {
       // Using window.open triggers the download in a new tab (which immediately closes)
       const downloadUrl = `${api.defaults.baseURL || "/api/v1"}/challenges/${challenge.id}/download`;
       window.open(downloadUrl, "_blank");
-    } catch (err) {
+    } catch (_err) {
       setFeedback({ msg: "Download failed.", type: "error" });
     }
   };
@@ -157,7 +157,7 @@ function ChallengeModal({ challenge, onClose, username }) {
     try {
       const res = await api.post(`/challenges/${challenge.id}/submit`, { flag });
       setFeedback({ msg: res.data.message || "Correct!", type: "success" });
-    } catch (err) {
+    } catch (_err) {
       setFeedback({ msg: err.response?.data?.detail || "Incorrect Flag", type: "error" });
     }
   };
@@ -271,7 +271,7 @@ export default function ChallengesPage() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const loadData = async () => {
     if (DEMO_MODE) {
@@ -301,8 +301,8 @@ export default function ChallengesPage() {
 
         setChallenges(grouped);
 
-    } catch (err) {
-        console.error("Failed to load challenges", err);
+    } catch (_err) {
+        console.error("Failed to load challenges", _err);
     }
   };
 
