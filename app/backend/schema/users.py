@@ -86,3 +86,4 @@ class UserInResponse(BaseSchemaModel):
     is_verified: bool
     team_name: str | None = None
     team_id: int | None = None
+    token_data: dict | None = None

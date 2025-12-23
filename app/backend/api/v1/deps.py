@@ -41,6 +41,7 @@ class TokenPayload(BaseModel):
     iss: str | None = None
     type: str | None = None
     mfv: bool | None = None
+    mfa_recovery: bool | None = None
 
 
 # -----------------------------
@@ -98,6 +99,7 @@ async def get_current_user(
         )
     # ---------------------
 
+    user.token_data = token_data.model_dump()
     return user
 
 
@@ -130,6 +132,7 @@ async def get_current_user_partial(
     if not user:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found.") from None
 
+    user.token_data = token_data.model_dump()
     return user
 
 
@@ -207,3 +210,25 @@ UserRepositoryDep = Annotated[UserCRUDRepository, Depends(get_repository(UserCRU
 TeamsRepositoryDep = Annotated[TeamsCRUDRepository, Depends(get_repository(TeamsCRUDRepository))]
 
 ChallengesRepositoryDep = Annotated[ChallengesCRUDRepository, Depends(get_repository(ChallengesCRUDRepository))]
+
+
+async def RequireNonRecoverySession(current_user: CurrentUserDep):
+    if current_user.token_data.get("mfa_recovery"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "RECOVERY_SESSION",
+                "message": "This action is not allowed during MFA recovery session. Please reset MFA first.",
+            },
+        )
+
+
+async def RequireAdminNonRecovery(current_admin: CurrentAdminDep):
+    if current_admin.token_data.get("mfa_recovery"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "ADMIN_RECOVERY_SESSION",
+                "message": "Admin actions are disabled during MFA recovery session.",
+            },
+        )

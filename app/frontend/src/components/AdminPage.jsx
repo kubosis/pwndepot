@@ -286,6 +286,9 @@ export default function AdminPage({ loggedInUser, setLoggedInUser}) {
               error={errorMessage}
               success={mfaSuccess}
               loading={loading}
+              placeholder="Enter MFA code or backup code"
+              allowBackup={true}
+              showHint={true} 
               onVerify={async () => {
                 if (loading) return;
 
@@ -364,6 +367,9 @@ export default function AdminPage({ loggedInUser, setLoggedInUser}) {
                 error={deleteError}
                 success={mfaSuccess}
                 loading={modalLoading}
+                placeholder="Enter MFA code"
+                allowBackup={false}
+                showHint={false}
                 onVerify={async () => {
                   if (modalLoading) return;
                   setModalLoading(true);
@@ -531,6 +537,9 @@ export default function AdminPage({ loggedInUser, setLoggedInUser}) {
                 error={statusError}
                 success={mfaSuccess}
                 loading={modalLoading}
+                placeholder="Enter MFA code"
+                allowBackup={false}
+                showHint={false}
                 onVerify={async () => {
                   if (modalLoading) return;
                   setModalLoading(true);

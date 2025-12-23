@@ -24,7 +24,7 @@ export default function Login({ setLoggedInUser }) {
   const [loginPhase, setLoginPhase] = useState("idle");
   // idle | submitting | success | mfa | error
 
-  const isBusy = loginPhase === "submitting" || loginPhase === "success";
+  const isBusy = loginPhase === "submitting" || loginPhase === "success" || loginPhase === "mfa";
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -88,7 +88,6 @@ export default function Login({ setLoggedInUser }) {
       // --- NEW MFA CHECK ---
       if (loginRes.data.mfa_required) {
         setLoginPhase("mfa");
-        setSuccessMessage("Credentials accepted. MFA required.");
         setLoading(false);
         // Redirect to the verification page
         setTimeout(() => navigate("/mfa-verify"), 1200);
@@ -186,35 +185,43 @@ export default function Login({ setLoggedInUser }) {
     <div className="register-container">
       <div className="register-card">
         <h2>Login</h2>
+        
+        {loginPhase === "mfa" && (
+          <p className="success-text fade-in text-center mb-4">
+            Credentials accepted. Redirecting to MFA verification…
+          </p>
+        )}
 
-        <form onSubmit={handleSubmit}>
-          <input
-            type="email"
-            name="email"
-            placeholder="Email Address"
-            value={formData.email}
-            onChange={handleChange}
-            required
-            disabled={isBusy}
-          />
+        {loginPhase !== "mfa" && (
+          <form onSubmit={handleSubmit}>
+            <input
+              type="email"
+              name="email"
+              placeholder="Email Address"
+              value={formData.email}
+              onChange={handleChange}
+              required
+              disabled={isBusy}
+            />
 
-          <input
-            type="password"
-            name="password"
-            placeholder="Password"
-            value={formData.password}
-            onChange={handleChange}
-            required
-            disabled={isBusy}
-          />
+            <input
+              type="password"
+              name="password"
+              placeholder="Password"
+              value={formData.password}
+              onChange={handleChange}
+              required
+              disabled={isBusy}
+            />
 
-          <button type="submit" disabled={isBusy}>
-            {loginPhase === "submitting" && "Logging in..."}
-            {loginPhase === "success" && "Redirecting..."}
-            {loginPhase === "idle" && "Login"}
-            {loginPhase === "error" && "Login"}
-          </button>
-        </form>
+            <button type="submit" disabled={isBusy}>
+              {loginPhase === "submitting" && "Logging in..."}
+              {loginPhase === "success" && "Redirecting..."}
+              {loginPhase === "idle" && "Login"}
+              {loginPhase === "error" && "Login"}
+            </button>
+          </form>
+        )}
 
         <Feedback message={errorMessage} type="error" />
         <Feedback message={successMessage} type="success" />

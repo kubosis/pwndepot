@@ -32,6 +32,7 @@ const NO_REFRESH_ENDPOINTS = [
   "/users/reset-password",
   // ADMIN STEP-UP MFA 
   "/mfa/admin/verify",
+  "/mfa/verify",
 ];
 
 api.interceptors.response.use(

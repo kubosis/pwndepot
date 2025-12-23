@@ -1376,7 +1376,38 @@ body.modal-open {
   font-weight: 600;
 }
 
+.danger-btn-profile {
+  width: auto !important;
+  min-width: 180px;
+  padding: 0.7rem 1.4rem;
+  border-radius: 9999px;
+  margin: 0.5rem auto 0;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+}
 
+.navbar {
+  position: relative;
+}
+
+.navbar-recovery {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: #facc15;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+@media (max-width: 1300px) {
+  .navbar-recovery {
+    display: none;
+  }
+}
 
 
 

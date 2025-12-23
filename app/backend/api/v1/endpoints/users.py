@@ -26,6 +26,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.backend.api.v1.deps import (
     CurrentAdminDep,
     CurrentUserDep,
+    RequireAdminNonRecovery,
+    RequireNonRecoverySession,
     TeamsRepositoryDep,
     UserRepositoryDep,
 )
@@ -45,7 +47,9 @@ from app.backend.security.exceptions import (
     PasswordResetTokenExpired,
     PasswordResetTokenInvalid,
 )
+from app.backend.security.geo_ip import resolve_country
 from app.backend.security.refresh_tokens import generate_refresh_token
+from app.backend.security.security_events import SecurityEventType, emit_security_event, is_new_device
 from app.backend.security.tokens import (
     EmailVerificationTokenExpired,
     EmailVerificationTokenInvalid,
@@ -60,6 +64,7 @@ from app.backend.utils.admin_mfa import (
     consume_admin_mfa,
     is_admin_mfa_valid,
 )
+from app.backend.utils.device_fingerprint import build_device_fingerprint
 from app.backend.utils.email_validation import (
     has_mx_record,
     is_trusted_email,
@@ -87,6 +92,7 @@ def _construct_user_in_response(
         is_verified=user.is_email_verified,
         team_id=team_id,
         team_name=team_name,
+        token_data=getattr(user, "token_data", None),
     )
 
 
@@ -160,7 +166,7 @@ async def forgot_password(
 # -----------------------------
 # RESET PASSWORD
 # -----------------------------
-@router.post("/reset-password", status_code=200)
+@router.post("/reset-password", status_code=200, dependencies=[Depends(RequireNonRecoverySession)])
 @limiter.limit("2/minute")
 async def reset_password(
     request: Request,
@@ -407,6 +413,20 @@ async def login_for_access_token(
 
     logger.info(f"User {db_user.email} logged in successfully.")
 
+    fingerprint = build_device_fingerprint(request)
+
+    country = resolve_country(request)
+
+    if await is_new_device(async_session, db_user.id, fingerprint):
+        await emit_security_event(
+            user=db_user,
+            event=SecurityEventType.LOGIN_NEW_DEVICE,
+            request=request,
+            extra={
+                "country": country,
+            },
+        )
+
     # Create FULL Access Token
     token_data = {"sub": str(db_user.id), "mfv": True}
     access_token = create_jwt_access_token(data=token_data)
@@ -531,7 +551,9 @@ async def refresh_access_token(request: Request, async_session: AsyncSession = D
 
 
 ## Suspend user account
-@router.put("/{user_id}/status", status_code=status.HTTP_204_NO_CONTENT)
+@router.put(
+    "/{user_id}/status", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(RequireAdminNonRecovery)]
+)
 async def change_user_status(
     user_id: int,
     payload: UserStatusUpdate,
@@ -618,7 +640,7 @@ async def get_me(current_user: CurrentUserDep, team_repo: TeamsRepositoryDep):
 # -----------------------------
 # UPDATE USER
 # -----------------------------
-@router.put("/update/{user_id}", response_model=UserInResponse)
+@router.put("/update/{user_id}", response_model=UserInResponse, dependencies=[Depends(RequireAdminNonRecovery)])
 async def update_user(
     user_id: int,
     user_update: UserInUpdate,
@@ -638,7 +660,7 @@ async def update_user(
 # -----------------------------
 # DELETE USER (ADMIN)
 # -----------------------------
-@router.delete("/{user_id}", response_model=dict)
+@router.delete("/{user_id}", response_model=dict, dependencies=[Depends(RequireAdminNonRecovery)])
 async def delete_user(
     user_id: int,
     payload: AdminDeleteConfirm,

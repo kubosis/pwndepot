@@ -1,15 +1,21 @@
 // Profile.jsx
-import React, { useState, useEffect } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from "recharts";
 import { api } from "../config/api";
 
-export default function Profile() {
+export default function Profile({ loggedInUser }) {
   const { username } = useParams();
+  const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [challengeData, setChallengeData] = useState([]);
   const [notFound, setNotFound] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
+  const [resetting, setResetting] = useState(false);
+
+  const isRecovery = loggedInUser?.token_data?.mfa_recovery === true;
+  const isOwnProfile =
+    loggedInUser && user && loggedInUser.username === user.username;
+  const hasMfa = user?.mfa_enabled === true;
 
   const PIE_COLORS = [
     "#22c55e",
@@ -21,18 +27,12 @@ export default function Profile() {
 
   useEffect(() => {
     const loadProfile = async () => {
+      console.log("PROFILE loggedInUser =", loggedInUser);
       try {
         // 1) Fetch user basic info by USERNAME
         const userRes = await api.get(`/users/profile/${username}`);
         setUser(userRes.data);
         setNotFound(false);
-
-        try {
-          const meRes = await api.get("/users/me");
-          setCurrentUser(meRes.data);
-        } catch (err) {
-          // User might not be logged in, ignore
-        }
 
         // 2) Fetch solved challenges by category (API may not exist yet)
         try {
@@ -133,18 +133,27 @@ export default function Profile() {
   )
 }
 
-    {currentUser && currentUser.username === user.username && (
-              <div className="profile-stats" style={{ marginTop: "20px", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "20px" }}>
-                  <h3>Security</h3>
-                  {user.mfa_enabled ? (
-                      <p style={{ color: "#22c55e", fontWeight: "bold" }}>✓ MFA Enabled</p>
-                  ) : (
-                      <Link to="/mfa/setup" className="fancy-btn" style={{marginTop: '10px'}}>
-                          Enable Two-Factor Auth
-                      </Link>
-                  )}
-              </div>
-          )}
+    {isOwnProfile && (
+      <div className="profile-stats">
+        <h3>Security</h3>
+
+        {isRecovery ? (
+          <button
+            onClick={() => navigate("/mfa/reset")}
+            className="danger-btn danger-btn-profile"
+          >
+            Reset MFA
+          </button>
+        )
+        : (
+          <Link to="/mfa/setup" className="fancy-btn">
+            Enable Two-Factor Auth
+          </Link>
+        )}
+      </div>
+    )}
+
+
 
   <div className="profile-footer">
     <Link to="/Rankings" className="fancy-btn">Back to Scoreboard</Link>

@@ -28,6 +28,7 @@ def create_jwt_access_token(data: dict) -> str:
         "exp": now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
         "iss": "PwnDepot",
         "mfv": data.get("mfv", False),
+        "mfa_recovery": data.get("mfa_recovery", False),
     }
 
     encoded_jwt = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
