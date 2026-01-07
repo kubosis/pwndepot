@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import jwt
-from app.backend.config.settings import get_settings
 from starlette.requests import Request
+
+from app.backend.config.settings import get_settings
 
 settings = get_settings()
 

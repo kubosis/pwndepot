@@ -1,4 +1,3 @@
-
 from app.backend.schema.base import BaseSchemaModel
 
 

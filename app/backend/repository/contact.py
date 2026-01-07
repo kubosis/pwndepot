@@ -1,11 +1,12 @@
 import hashlib
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.backend.config.settings import get_settings
 from app.backend.db.models import ContactMessageTable
 from app.backend.schema.contact import ContactRequest
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 settings = get_settings()
 

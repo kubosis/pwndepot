@@ -6,9 +6,10 @@ import inspect
 from collections.abc import Callable
 from typing import Any, TypeVar, cast, get_type_hints
 
-from app.backend.config.settings import get_settings
 from slowapi import Limiter
 from starlette.requests import Request
+
+from app.backend.config.settings import get_settings
 
 settings = get_settings()
 F = TypeVar("F", bound=Callable[..., Any])

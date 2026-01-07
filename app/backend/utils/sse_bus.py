@@ -33,4 +33,5 @@ class SSEBus:
             with contextlib.suppress(asyncio.QueueFull):
                 q.put_nowait(msg)
 
+
 sse_bus = SSEBus()

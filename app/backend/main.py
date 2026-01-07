@@ -2,6 +2,12 @@ import os
 
 import fastapi
 import uvicorn
+from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
 from app.backend.api.v1.router import api_router
 from app.backend.config.settings import BackendBaseSettings, get_settings
 from app.backend.middleware.ctf_gate import CTFGateMiddleware
@@ -13,11 +19,6 @@ from app.backend.utils.redis_sse_listener import (
     start_redis_sse_listener,
     stop_redis_sse_listener,
 )
-from fastapi.middleware.cors import CORSMiddleware
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
-from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 
 def _create_fastapi_backend(app_settings: BackendBaseSettings) -> fastapi.FastAPI:
@@ -45,29 +46,28 @@ def _create_fastapi_backend(app_settings: BackendBaseSettings) -> fastapi.FastAP
 
     backend_app.add_event_handler("shutdown", ctf_redis_bus.close)
 
-
     # -----------------------------------------
     # CTF Gate (global lock when CTF ended)
     # -----------------------------------------
     backend_app.add_middleware(
-    CTFGateMiddleware,
-    allowlist_exact={
-        "/",
-        "/contact",
-        "/privacy-policy",
-        "/terms-of-service",
-        "/acceptable-use-policy",
-        "/legal-notice",
-    },
-    allowlist_prefixes=(
-    "/assets",
-    "/favicon",
-    "/robots.txt",
-    "/api/v1/mfa",
-    "/api/v1/ctf-status",
-    ),
-)
-    
+        CTFGateMiddleware,
+        allowlist_exact={
+            "/",
+            "/contact",
+            "/privacy-policy",
+            "/terms-of-service",
+            "/acceptable-use-policy",
+            "/legal-notice",
+        },
+        allowlist_prefixes=(
+            "/assets",
+            "/favicon",
+            "/robots.txt",
+            "/api/v1/mfa",
+            "/api/v1/ctf-status",
+        ),
+    )
+
     # -----------------------------------------
     # Rate limiting middleware
     # -----------------------------------------

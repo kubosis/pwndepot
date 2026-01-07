@@ -1,9 +1,10 @@
 import hashlib
 import hmac
 
-from app.backend.config.settings import get_settings
 from loguru import logger
 from passlib.context import CryptContext
+
+from app.backend.config.settings import get_settings
 
 settings = get_settings()
 

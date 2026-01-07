@@ -1,6 +1,8 @@
 from email.message import EmailMessage
 from email.utils import make_msgid
 
+from loguru import logger
+
 from app.backend.config.settings import get_settings
 from app.backend.db.models import RoleEnum
 from app.backend.security.security_events import SecurityEventType
@@ -10,7 +12,6 @@ from app.backend.utils.mail_template import (
     new_device_login_email_html,
 )
 from app.backend.utils.mailer import send_email
-from loguru import logger
 
 settings = get_settings()
 LOGO_PATH = settings.LOGO_PATH

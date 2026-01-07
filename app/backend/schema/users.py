@@ -1,8 +1,9 @@
 from datetime import datetime
 
+from pydantic import BaseModel, EmailStr, Field, constr, field_validator
+
 from app.backend.db.models import RoleEnum, StatusEnum
 from app.backend.schema.base import BaseSchemaModel
-from pydantic import BaseModel, EmailStr, Field, constr, field_validator
 
 
 # ------------------------------
@@ -87,6 +88,7 @@ class UserInResponse(BaseSchemaModel):
     team_id: int | None = None
     token_data: dict | None = None
     mfa_enabled: bool = False
+
 
 class PublicUserProfile(BaseSchemaModel):
     id: int

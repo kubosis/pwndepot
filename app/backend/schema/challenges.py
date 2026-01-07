@@ -17,4 +17,3 @@ class ChallengeInResponse(BaseSchemaModel):
 
 class FlagSubmission(BaseSchemaModel):
     flag: str
-

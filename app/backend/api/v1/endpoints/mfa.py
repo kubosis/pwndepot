@@ -1,6 +1,9 @@
 from datetime import datetime, timedelta, timezone
 
 import pyotp
+from fastapi import APIRouter, HTTPException, Request, Response, status
+from sqlalchemy import func, select, update
+
 from app.backend.api.v1.deps import AsyncSessionDep, CurrentUserDep, PartiallyLoggedInUserDep
 from app.backend.config.redis import redis_client
 from app.backend.config.settings import get_settings
@@ -16,8 +19,6 @@ from app.backend.utils.admin_mfa import mark_admin_mfa_verified
 from app.backend.utils.device_fingerprint import build_device_fingerprint
 from app.backend.utils.limiter import limiter
 from app.backend.utils.limiter_keys import admin_key, mfa_verify_key
-from fastapi import APIRouter, HTTPException, Request, Response, status
-from sqlalchemy import func, select, update
 
 settings = get_settings()
 
@@ -211,7 +212,9 @@ async def verify_admin_mfa(
 
 @limiter.limit("5/minute")
 @router.post("/reset")
-async def reset_mfa(request: Request, response: Response, payload: MfaResetRequest, session: AsyncSessionDep, user: CurrentUserDep):
+async def reset_mfa(
+    request: Request, response: Response, payload: MfaResetRequest, session: AsyncSessionDep, user: CurrentUserDep
+):
     if not user.mfa_enabled:
         raise HTTPException(400, "MFA not enabled")
 
@@ -234,11 +237,7 @@ async def reset_mfa(request: Request, response: Response, payload: MfaResetReque
     )
 
     # revoke refresh tokens (force logout everywhere)
-    await session.execute(
-        update(RefreshTokenTable)
-        .where(RefreshTokenTable.user_id == user.id)
-        .values(revoked=True)
-    )
+    await session.execute(update(RefreshTokenTable).where(RefreshTokenTable.user_id == user.id).values(revoked=True))
 
     session.add(user)
     await session.commit()

@@ -1,1 +1,22 @@
 tests/backend/conftest.py:generic-api-key:37
+# false positives
+app/frontend/src/components/Login.jsx:jwt:221
+app/frontend/src/components/MfaReset.jsx:jwt:112
+app/frontend/src/components/Home.jsx:jwt:57
+app/frontend/src/components/Contact.jsx:jwt:172
+app/frontend/src/components/AdminPage.jsx:jwt:701
+app/frontend/src/components/MfaVerify.jsx:jwt:137
+app/frontend/src/components/AccountDelete.jsx:jwt:24
+app/frontend/src/components/CaptainPanel.jsx:jwt:510
+app/frontend/src/components/JoinTeam.jsx:jwt:171
+app/frontend/src/components/Profile.jsx:jwt:393
+app/frontend/src/components/MfaSetup.jsx:jwt:145
+app/frontend/src/components/Rankings.jsx:jwt:312
+app/frontend/src/components/Register.jsx:jwt:158
+app/frontend/src/components/Teams.jsx:jwt:183
+app/frontend/src/components/AdminPage.jsx:jwt:931
+app/frontend/src/components/ReadMore.jsx:jwt:15
+app/frontend/src/components/VerifyEmail.jsx:jwt:88
+app/frontend/src/components/TeamPage.jsx:jwt:598
+app/frontend/src/components/ResetPassword.jsx:jwt:202
+

@@ -4,6 +4,10 @@
 from datetime import datetime, timedelta, timezone
 
 import fastapi
+from fastapi import Body, Depends, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.requests import Request
+
 from app.backend.api.v1.deps import get_current_admin, get_db
 from app.backend.db.models import UserTable
 from app.backend.repository.ctf_state import CTFStateRepository
@@ -11,9 +15,6 @@ from app.backend.schema.ctf import CTFStartRequest
 from app.backend.utils.ctf_redis import ctf_redis_bus
 from app.backend.utils.limiter import rate_limit
 from app.backend.utils.limiter_keys import admin_key
-from fastapi import Body, Depends, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.requests import Request
 
 router = fastapi.APIRouter(tags=["ctf"])
 

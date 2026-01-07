@@ -17,6 +17,13 @@ from typing import Annotated
 
 import fastapi
 import pyotp
+from fastapi import BackgroundTasks, Depends, HTTPException, Request, Response, status
+from fastapi.responses import JSONResponse
+from fastapi.security import OAuth2PasswordRequestForm
+from loguru import logger
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.backend.api.v1.deps import (
     AsyncSessionDep,
     CurrentAdminDep,
@@ -71,12 +78,6 @@ from app.backend.utils.exceptions import DBEntityDoesNotExist
 from app.backend.utils.limiter import limiter
 from app.backend.utils.limiter_keys import forgot_password_key, login_key, resend_verification_key, reset_password_key
 from app.backend.utils.mail import send_reset_password_email, send_verification_email
-from fastapi import BackgroundTasks, Depends, HTTPException, Request, Response, status
-from fastapi.responses import JSONResponse
-from fastapi.security import OAuth2PasswordRequestForm
-from loguru import logger
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 
 router = fastapi.APIRouter(tags=["users"])
 settings = get_settings()
@@ -152,11 +153,7 @@ async def delete_my_account(
             )
 
     # 3) Revoke refresh tokens (logout everywhere)
-    await session.execute(
-        update(RefreshTokenTable)
-        .where(RefreshTokenTable.user_id == user.id)
-        .values(revoked=True)
-    )
+    await session.execute(update(RefreshTokenTable).where(RefreshTokenTable.user_id == user.id).values(revoked=True))
 
     # 4) Delete the account (repo handles errors/consistency)
     await account_repo.delete_account_by_id(user.id)
@@ -181,6 +178,7 @@ async def delete_my_account(
         contextlib.suppress(Exception)
 
     return {"message": "Account deleted successfully"}
+
 
 # -----------------------------
 # SECURE REGISTRATION
@@ -447,7 +445,6 @@ async def login_for_access_token(
             },
         )
 
-
     # 3. Email verification & account status check
     if not db_user.is_email_verified:
         logger.warning(f"Login attempt with unverified email: {db_user.email}")
@@ -558,6 +555,7 @@ async def login_for_access_token(
 
     return response
 
+
 # -----------------------------
 # ADMIN: SPECIAL LOGIN ENDPOINT FOR ADMINS
 # -----------------------------
@@ -642,7 +640,6 @@ async def admin_login_for_access_token(
     )
 
     return response
-
 
 
 # -----------------------------
@@ -813,6 +810,7 @@ async def get_me(current_user: CurrentUserDep, team_repo: TeamsRepositoryDep, re
         team_name=team.name if team else None,
     )
 
+
 # -----------------------------
 # UPDATE USER
 # -----------------------------
@@ -831,6 +829,7 @@ async def update_user(
     logger.warning(f"ADMIN ACTION: {current_admin.username} updated user_id={user_id}")
 
     return _construct_user_in_response(updated)
+
 
 # -----------------------------
 # DELETE USER (ADMIN)
@@ -886,7 +885,9 @@ async def delete_user(
 # -----------------------------
 @router.post("/logout", status_code=status.HTTP_200_OK)
 @limiter.limit("30/minute")
-async def logout_user(request: Request, current_user: CurrentUserDep, async_session: AsyncSession = Depends(get_async_session)):
+async def logout_user(
+    request: Request, current_user: CurrentUserDep, async_session: AsyncSession = Depends(get_async_session)
+):
     stmt = update(RefreshTokenTable).where(RefreshTokenTable.user_id == current_user.id).values(revoked=True)
     await async_session.execute(stmt)
     await async_session.commit()

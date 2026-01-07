@@ -2,6 +2,11 @@ from collections.abc import AsyncGenerator, Callable
 from typing import Annotated
 
 import jwt
+from fastapi import Depends, HTTPException, Request, status
+from loguru import logger
+from pydantic import BaseModel, ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.backend.config.settings import get_settings
 from app.backend.db.models import RoleEnum, StatusEnum, UserTable
 from app.backend.db.session import AsyncSessionLocal
@@ -10,10 +15,6 @@ from app.backend.repository.challenges import ChallengesCRUDRepository
 from app.backend.repository.teams import TeamsCRUDRepository
 from app.backend.repository.users import UserCRUDRepository
 from app.backend.utils.admin_mfa import is_admin_mfa_valid
-from fastapi import Depends, HTTPException, Request, status
-from loguru import logger
-from pydantic import BaseModel, ValidationError
-from sqlalchemy.ext.asyncio import AsyncSession
 
 settings = get_settings()
 

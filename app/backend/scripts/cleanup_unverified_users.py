@@ -1,9 +1,10 @@
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import delete
+
 from app.backend.config.settings import get_settings
 from app.backend.db.models import RoleEnum, UserTable
 from app.backend.db.session import get_async_session
-from sqlalchemy import delete
 
 settings = get_settings()
 UNVERIFIED_TTL_DAYS = settings.UNVERIFIED_TTL_DAYS

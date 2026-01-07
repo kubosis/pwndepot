@@ -26,6 +26,10 @@ import json
 import secrets
 
 import fastapi
+from fastapi import Body, HTTPException, status
+from loguru import logger
+from starlette.requests import Request
+
 from app.backend.api.v1.deps import CurrentUserDep, TeamsRepositoryDep, UserRepositoryDep
 from app.backend.config.redis import redis_client
 from app.backend.config.settings import get_settings
@@ -38,19 +42,18 @@ from app.backend.schema.teams import (
 )
 from app.backend.security.tokens import create_team_invite_token, decode_team_invite_token
 from app.backend.utils.limiter import limiter
-from fastapi import Body, HTTPException, status
-from loguru import logger
-from starlette.requests import Request
 
 
 def _invite_exchange_key(code: str) -> str:
     return f"teams:invite_exchange:{code}"
+
 
 router = fastapi.APIRouter(tags=["teams"])
 settings = get_settings()
 
 
 INVITE_EXCHANGE_TTL_SECONDS = settings.INVITE_EXCHANGE_TTL_SECONDS
+
 
 async def _construct_full_team_response(team, team_repo, include_invite: bool = False) -> FullTeamInResponse:
     # team: TeamTable
@@ -225,6 +228,7 @@ async def delete_team_by_id(
 # JOIN TEAM
 # -------------------------------------------------------
 
+
 @router.post("/join-exchange", response_model=dict)
 @limiter.limit("10/minute")
 async def join_team_exchange(
@@ -254,12 +258,12 @@ async def join_team_exchange(
     team = await team_repo.read_team_by_id(team_id)
     if not team:
         raise HTTPException(404, "Team not found")
-    
+
     # revoke exchanges created from old invites
     if not exchange_join_code or exchange_join_code != team.join_code:
         raise HTTPException(400, "Exchange code invalid or expired")
 
-    # enforce max 6 users 
+    # enforce max 6 users
     if len(team.user_associations) >= 6:
         raise HTTPException(400, "Team is full (maximum 6 members).")
 
@@ -349,7 +353,6 @@ async def invite_exchange(
     )
 
     return {"exchange_code": code}
-
 
 
 # -------------------------------------------------------
@@ -458,6 +461,7 @@ async def get_team_by_name(team_name: str, team_repo: TeamsRepositoryDep, reques
 
     return await _construct_full_team_response(team, team_repo, include_invite=False)
 
+
 @router.get("/myteam/invite", response_model=dict, status_code=status.HTTP_200_OK)
 @limiter.limit("30/minute")
 async def get_my_team_invite(current_user: CurrentUserDep, team_repo: TeamsRepositoryDep, request: Request):
@@ -472,4 +476,3 @@ async def get_my_team_invite(current_user: CurrentUserDep, team_repo: TeamsRepos
     token = create_team_invite_token(team.id, team.join_code)
     invite_url = f"{settings.FRONTEND_DOMAIN}/join-team?token={token}"
     return {"invite_url": invite_url}
-

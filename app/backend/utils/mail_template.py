@@ -12,6 +12,7 @@ def _e(v) -> str:
         return ""
     return html.escape(str(v), quote=True)
 
+
 settings = get_settings()
 
 

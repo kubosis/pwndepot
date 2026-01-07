@@ -1,7 +1,8 @@
 from datetime import datetime
 
-from app.backend.schema.base import BaseSchemaModel
 from pydantic import constr
+
+from app.backend.schema.base import BaseSchemaModel
 
 
 # -----------------------------
@@ -26,11 +27,14 @@ class TeamInDelete(BaseSchemaModel):
     team_name: str | None = None
     team_id: int | None = None
 
+
 class TeamInviteExchangeRequest(BaseSchemaModel):
     token: constr(min_length=10, max_length=4096)  # token is long
 
+
 class TeamInviteExchangeResponse(BaseSchemaModel):
     exchange_code: str
+
 
 class TeamJoinViaExchange(BaseSchemaModel):
     exchange_code: constr(min_length=16, max_length=64)

@@ -1,3 +1,5 @@
+from fastapi import APIRouter
+
 from app.backend.api.v1.endpoints import ctf_events
 from app.backend.api.v1.endpoints.challenges import router as challenges_router
 from app.backend.api.v1.endpoints.contact import router as contact_router
@@ -6,7 +8,6 @@ from app.backend.api.v1.endpoints.mfa import router as mfa_router
 from app.backend.api.v1.endpoints.teams import router as teams_router
 from app.backend.api.v1.endpoints.users import router as users_router
 from app.backend.config.settings import get_settings
-from fastapi import APIRouter
 
 settings = get_settings()
 

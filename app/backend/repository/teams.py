@@ -3,15 +3,16 @@ import secrets
 import string
 
 import sqlalchemy
-from app.backend.db.models import TeamTable, UserCompletedChallengeTable, UserInTeamTable, UserTable
-from app.backend.repository.base import BaseCRUDRepository
-from app.backend.schema.teams import TeamInCreate
-from app.backend.security.password import PasswordManager
 from loguru import logger
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
+
+from app.backend.db.models import TeamTable, UserCompletedChallengeTable, UserInTeamTable, UserTable
+from app.backend.repository.base import BaseCRUDRepository
+from app.backend.schema.teams import TeamInCreate
+from app.backend.security.password import PasswordManager
 
 
 async def _generate_unique_join_code(async_session: AsyncSession) -> str:
@@ -112,7 +113,7 @@ class TeamsCRUDRepository(BaseCRUDRepository):
             return None, False
         return team, team.captain_user_id == user.id
 
-   # -------------------------------------------------------
+    # -------------------------------------------------------
     # REGENERATE INVITE TOKEN (+ JOIN CODE)
     # -------------------------------------------------------
     async def regenerate_invite_token(self, team: TeamTable):

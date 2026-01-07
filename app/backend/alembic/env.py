@@ -5,14 +5,14 @@ sys.path.insert(0, Path(__file__).absolute().parent.parent.parent.parent.__str__
 
 from logging.config import fileConfig
 
+from alembic import context
+from sqlalchemy import engine_from_config, pool
+
 from app.backend.config.settings import get_settings
 from app.backend.db import models  # noqa: F401
 
 # import all database tables HERE ------------------------------
 from app.backend.db.base import Base
-from sqlalchemy import engine_from_config, pool
-
-from alembic import context
 
 # --------------------------------------------------------------
 target_metadata = Base.metadata

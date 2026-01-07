@@ -4,13 +4,14 @@ from collections.abc import Iterable
 from datetime import datetime, timezone
 
 import jwt
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
+
 from app.backend.config.settings import get_settings
 from app.backend.db.models import RoleEnum, UserTable
 from app.backend.db.session import AsyncSessionLocal
 from app.backend.repository.ctf_state import CTFStateRepository
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
 
 settings = get_settings()
 
@@ -39,7 +40,7 @@ class CTFGateMiddleware(BaseHTTPMiddleware):
         for pfx in self.allowlist_prefixes:
             if path.startswith(pfx):
                 return True
-            
+
         return path == "/api/v1/users/admin/login"
 
     async def _is_admin_session(self, request: Request) -> bool:
@@ -95,4 +96,3 @@ class CTFGateMiddleware(BaseHTTPMiddleware):
 
         # 4) CTF open -> normal
         return await call_next(request)
-

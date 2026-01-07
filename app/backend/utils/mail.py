@@ -1,10 +1,11 @@
 from email.message import EmailMessage
 from email.utils import make_msgid
 
+from loguru import logger
+
 from app.backend.config.settings import get_settings
 from app.backend.utils.mail_template import reset_password_email_html, verification_email_html
 from app.backend.utils.mailer import send_email
-from loguru import logger
 
 settings = get_settings()
 
@@ -13,11 +14,14 @@ settings = get_settings()
 # -----------------------------
 LOGO_PATH = settings.LOGO_PATH
 
+
 # -----------------------------
 # CONTACT EMAIL
 # -----------------------------
 def _strip_crlf(s: str) -> str:
     return s.replace("\r", "").replace("\n", "")
+
+
 def send_contact_email(*, name: str, email: str, message: str) -> bool:
     name = _strip_crlf(name)
     email = _strip_crlf(email)

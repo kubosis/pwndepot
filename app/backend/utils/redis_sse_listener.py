@@ -7,6 +7,7 @@ import json
 import logging
 
 import redis.asyncio as redis
+
 from app.backend.config.settings import get_settings
 from app.backend.utils.sse_bus import sse_bus
 

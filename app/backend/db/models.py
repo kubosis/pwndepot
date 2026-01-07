@@ -2,10 +2,11 @@ import enum
 from datetime import datetime
 from typing import ClassVar
 
-from app.backend.db.base import Base
 from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.backend.db.base import Base
 
 
 class RoleEnum(enum.Enum):
@@ -268,6 +269,7 @@ class RefreshTokenTable(Base):
         DateTime(timezone=True),
         server_default=func.now(),
     )
+
 
 class CTFStateTable(Base):
     __tablename__ = "ctf_state"

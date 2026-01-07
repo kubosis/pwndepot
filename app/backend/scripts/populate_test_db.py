@@ -11,11 +11,12 @@ import asyncio
 import sys
 from pathlib import Path
 
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+
 from app.backend.db import models
 from app.backend.db.session import AsyncSessionLocal
 from app.backend.security.password import PasswordManager
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 
 
 async def seed_db():

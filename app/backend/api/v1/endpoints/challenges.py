@@ -11,13 +11,14 @@
 import os
 
 import fastapi
+from fastapi import HTTPException, status
+from fastapi.responses import FileResponse
+from loguru import logger
+
 from app.backend.api.v1.deps import ChallengesRepositoryDep, CurrentUserDep, TeamsRepositoryDep
 from app.backend.db.models import ChallengeTable
 from app.backend.schema.challenges import ChallengeInResponse, FlagSubmission
 from app.backend.schema.teams import TeamWithScoresInResponse
-from fastapi import HTTPException, status
-from fastapi.responses import FileResponse
-from loguru import logger
 
 router = fastapi.APIRouter(tags=["challenges"])
 

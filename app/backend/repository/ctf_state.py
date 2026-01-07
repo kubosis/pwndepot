@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.backend.db.models import CTFStateTable
 from app.backend.repository.base import BaseCRUDRepository
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class CTFStateRepository(BaseCRUDRepository):
@@ -63,6 +64,7 @@ class CTFStateRepository(BaseCRUDRepository):
         if state.ends_at is None:
             return True
         return state.ends_at >= datetime.now(timezone.utc)
+
     async def pause(self) -> CTFStateTable:
         state = await self.get_state()
         now = datetime.now(timezone.utc)

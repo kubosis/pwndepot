@@ -6,12 +6,13 @@ import json
 from collections.abc import AsyncGenerator
 
 import fastapi
+from fastapi import Request
+from starlette.responses import StreamingResponse
+
 from app.backend.config.redis import redis_client
 from app.backend.config.settings import get_settings
 from app.backend.utils.limiter import limiter
 from app.backend.utils.sse_bus import sse_bus
-from fastapi import Request
-from starlette.responses import StreamingResponse
 
 settings = get_settings()
 
@@ -28,11 +29,14 @@ def _sse_frame(event: str, data_obj) -> bytes:
     data = json.dumps(data_obj, separators=(",", ":"))
     return f"event: {event}\ndata: {data}\n\n".encode()
 
+
 MAX_SSE_CONNECTIONS_PER_IP = settings.MAX_SSE_CONNECTIONS_PER_IP
 SSE_CONN_TTL_SECONDS = settings.SSE_CONN_TTL_SECONDS
 
+
 def _sse_conn_key(ip: str) -> str:
     return f"sse:ctf:ip:{ip}"
+
 
 @router.get("/ctf-events")
 @limiter.limit("20/minute")
@@ -42,7 +46,7 @@ async def ctf_events(request: Request):
     Expects messages from sse_bus as JSON string: {"event":"ctf_changed","data":{...}}
     Sends SSE event name == payload.event, and data == payload.data
     """
-    
+
     ip = request.client.host if request.client else "unknown"
     key = _sse_conn_key(ip)
 
@@ -53,7 +57,6 @@ async def ctf_events(request: Request):
     if current > MAX_SSE_CONNECTIONS_PER_IP:
         await redis_client.decr(key)
         raise fastapi.HTTPException(status_code=429, detail="Too many SSE connections")
-
 
     q = await sse_bus.subscribe()
 

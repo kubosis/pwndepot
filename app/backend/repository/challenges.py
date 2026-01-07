@@ -1,11 +1,12 @@
 from pathlib import Path
 
-from app.backend.db.models import ChallengeTable, UserCompletedChallengeTable
-from app.backend.repository.base import BaseCRUDRepository
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.backend.db.models import ChallengeTable, UserCompletedChallengeTable
+from app.backend.repository.base import BaseCRUDRepository
 
 
 class ChallengesCRUDRepository(BaseCRUDRepository):
