@@ -18,6 +18,3 @@ class ChallengeInResponse(BaseSchemaModel):
 class FlagSubmission(BaseSchemaModel):
     flag: str
 
-
-class CTFStartRequest(BaseSchemaModel):
-    duration_seconds: int

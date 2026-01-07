@@ -19,12 +19,11 @@ COPY app/backend/pyproject.toml app/backend/uv.lock ./
 RUN uv sync --frozen --no-install-project --no-dev
 
 COPY app/backend /project/app/backend
+COPY assets/pwndepot_standard.png /project/assets/pwndepot_standard.png
 
 ENV PATH="/project/.venv/bin:$PATH"
 
 EXPOSE 8000
 
 
-CMD uvicorn app.backend.main:app \
-    --host 0.0.0.0 \
-    --port 8000
+CMD ["uvicorn", "app.backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

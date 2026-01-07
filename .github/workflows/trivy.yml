@@ -1,0 +1,66 @@
+name: Trivy Security Scan + Docker Image Scan
+
+on:
+  push:
+    branches:
+      - main
+      - devel
+  pull_request:
+    branches:
+      - main
+      - devel
+
+jobs:
+  trivy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # -------------------------
+      # TRIVY - FILESYSTEM SCAN
+      # -------------------------
+      - name: Trivy filesystem scan (backend, IaC, deps)
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          exit-code: 1
+          ignore-unfixed: true
+          skip-dirs: |
+            challenges
+          format: sarif
+          output: trivy-fs-results.sarif
+
+      - name: Upload Trivy FS report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-fs-report
+          path: trivy-fs-results.sarif
+
+      # -------------------------
+      # DOCKER IMAGE SCAN
+      # -------------------------
+      - name: Build backend image
+        run: docker build -t backend:ci -f app/backend/Dockerfile .
+
+      - name: Trivy backend image scan
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          image-ref: backend:ci
+          scanners: vuln
+          vuln-type: library
+          severity: CRITICAL,HIGH
+          exit-code: 0
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-image-results.sarif
+
+      - name: Upload Trivy image report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-image-report
+          path: trivy-image-results.sarif

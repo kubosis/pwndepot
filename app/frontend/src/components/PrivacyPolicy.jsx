@@ -9,8 +9,8 @@ function PrivacyPolicy() {
 
       <p>
         We respect your privacy. This Privacy Policy explains how Paweł Jamroziak, Jakub Sukdol, 
-        Balázs Vincze, Tóth Bertalan, Shane Samuel PRADEEP and Navin Rajendran in affiliation with Institut supérieur d’électronique de Paris collects, 
-        uses, and protects your personal data when you use ISEP CTF Platform, in compliance with the
+        Balázs Vincze, Tóth Bertalan, Shane Samuel PRADEEP and Navin Rajendran in affiliation with Institut supérieur d'électronique de Paris collects, 
+        uses, and protects your personal data when you use PwnDepot, in compliance with the
         EU General Data Protection Regulation (GDPR) and French data protection law.
       </p>
 
@@ -41,7 +41,7 @@ function PrivacyPolicy() {
 
       <h2>5. Data Sharing</h2>
       <p>
-        We do not sell, rent, or trade your data. Data may be shared with trusted service providers (e.g., Institut supérieur d’électronique de Paris) under strict confidentiality. Data may be disclosed if required by law or legal process.
+        We do not sell, rent, or trade your data. Data may be disclosed if required by law or legal process.
       </p>
 
       <h2>6. Data Retention</h2>
@@ -56,7 +56,7 @@ function PrivacyPolicy() {
         - Request correction or deletion of your data.<br/>
         - Restrict or object to processing.<br/>
         - Request data portability.<br/>
-        - Lodge a complaint with the Commission Nationale de l’Informatique et des Libertés (CNIL).<br/>
+        - Lodge a complaint with the Commission Nationale de l'Informatique et des Libertés (CNIL).<br/>
         You may exercise your rights by contacting us at: <strong>isepctfplatform@gmail.com</strong>
       </p>
     </>
