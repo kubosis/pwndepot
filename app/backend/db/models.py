@@ -2,11 +2,10 @@ import enum
 from datetime import datetime
 from typing import ClassVar
 
+from app.backend.db.base import Base
 from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from app.backend.db.base import Base
 
 
 class RoleEnum(enum.Enum):
@@ -268,4 +267,28 @@ class RefreshTokenTable(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
+    )
+
+class CTFStateTable(Base):
+    __tablename__ = "ctf_state"
+
+    # Single-row table. We always use id=1.
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    paused_remaining_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    started_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )

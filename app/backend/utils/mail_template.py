@@ -1,9 +1,25 @@
+import html
+
 from app.backend.config.settings import get_settings
+
+
+def _e(v) -> str:
+    """
+    Escape value for safe HTML insertion.
+    Always returns a string.
+    """
+    if v is None:
+        return ""
+    return html.escape(str(v), quote=True)
 
 settings = get_settings()
 
 
 def verification_email_html(verify_url: str, logo_cid: str) -> str:
+    # --- HTML escaping (CRITICAL) ---
+    verify_url = _e(verify_url)
+    logo_cid = _e(logo_cid)
+
     return f"""
 <!DOCTYPE html>
 <html>
@@ -112,6 +128,10 @@ def verification_email_html(verify_url: str, logo_cid: str) -> str:
 
 
 def reset_password_email_html(reset_url: str, logo_cid: str) -> str:
+    # --- HTML escaping (CRITICAL) ---
+    reset_url = _e(reset_url)
+    logo_cid = _e(logo_cid)
+
     return f"""
 <!DOCTYPE html>
 <html>
@@ -191,7 +211,14 @@ def backup_code_used_email_html(
     logo_cid: str,
     is_admin: bool = False,
 ) -> str:
-    geo = country if country else "Unknown"
+    geo = _e(country) if country else "Unknown"
+
+    # escape everything in HTML context
+    username = _e(username)
+    ip = _e(ip)
+    user_agent = _e(user_agent)
+    time = _e(time)
+    logo_cid = _e(logo_cid)
 
     border = "#fbbf24" if not is_admin else "#dc2626"
     title = "BACKUP CODE USED" if not is_admin else "ADMIN BACKUP CODE USED"
@@ -280,7 +307,13 @@ def mfa_reset_email_html(
     time: str,
     logo_cid: str,
 ) -> str:
-    geo = f"{country}" if country else "Unknown"
+    # escape everything in HTML context
+    username = _e(username)
+    ip = _e(ip)
+    user_agent = _e(user_agent)
+    time = _e(time)
+    geo = _e(country) if country else "Unknown"
+    logo_cid = _e(logo_cid)
 
     return f"""
 <!DOCTYPE html>
@@ -344,7 +377,13 @@ def new_device_login_email_html(
     logo_cid: str,
     is_admin: bool = False,
 ) -> str:
-    geo = f"{country}" if country else "Unknown"
+    # escape everything in HTML context
+    username = _e(username)
+    ip = _e(ip)
+    user_agent = _e(user_agent)
+    time = _e(time)
+    geo = _e(country) if country else "Unknown"
+    logo_cid = _e(logo_cid)
     border = "#38bdf8" if not is_admin else "#fb7185"
     subtitle = (
         "A new device was used to access your account."

@@ -1,17 +1,16 @@
 import typing
 
 import sqlalchemy
-from loguru import logger
-from sqlalchemy import func, update
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql import functions as sqlalchemy_functions
-
 from app.backend.db.models import StatusEnum, UserTable
 from app.backend.repository.base import BaseCRUDRepository
 from app.backend.schema.users import UserInCreate, UserInUpdate
 from app.backend.security.password import PasswordManager
 from app.backend.utils.exceptions import DBEntityAlreadyExists, DBEntityDoesNotExist
+from loguru import logger
+from sqlalchemy import func, update
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import functions as sqlalchemy_functions
 
 
 class UserCRUDRepository(BaseCRUDRepository):

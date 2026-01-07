@@ -24,6 +24,29 @@ services:
     expose:
       - "8000"  # Only accessible to other containers
 
+  migrate:
+    build:
+      context: .
+      dockerfile: app/backend/Dockerfile
+    container_name: alembic_migrate
+    env_file:
+      - ./app/backend/.env
+    depends_on:
+      - postgres
+    command: python -m alembic -c /project/app/backend/alembic.ini upgrade head
+
+  create-admin:
+    build:
+      context: .
+      dockerfile: app/backend/Dockerfile
+    container_name: create_admin
+    env_file:
+      - ./app/backend/.env
+    depends_on:
+      - postgres
+    command: python -m app.backend.scripts.manage --email admin@example.com
+
+
   frontend:
     build:
       context: .

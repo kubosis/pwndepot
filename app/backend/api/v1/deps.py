@@ -2,11 +2,6 @@ from collections.abc import AsyncGenerator, Callable
 from typing import Annotated
 
 import jwt
-from fastapi import Depends, HTTPException, Request, status
-from loguru import logger
-from pydantic import BaseModel, ValidationError
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.backend.config.settings import get_settings
 from app.backend.db.models import RoleEnum, StatusEnum, UserTable
 from app.backend.db.session import AsyncSessionLocal
@@ -15,6 +10,10 @@ from app.backend.repository.challenges import ChallengesCRUDRepository
 from app.backend.repository.teams import TeamsCRUDRepository
 from app.backend.repository.users import UserCRUDRepository
 from app.backend.utils.admin_mfa import is_admin_mfa_valid
+from fastapi import Depends, HTTPException, Request, status
+from loguru import logger
+from pydantic import BaseModel, ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 settings = get_settings()
 
@@ -64,8 +63,17 @@ async def get_current_user(
             token,
             settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM],
+            issuer="PwnDepot",
         )
         token_data = TokenPayload(**payload)
+
+        # Enforce access token only
+        if token_data.type != "access":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token type.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
     except jwt.ExpiredSignatureError as err:
         logger.info("Error: Login attempt with invalid token")
@@ -122,8 +130,14 @@ async def get_current_user_partial(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated.")
 
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM], issuer="PwnDepot")
         token_data = TokenPayload(**payload)
+        if token_data.type != "access":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token type.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
     except (jwt.PyJWTError, ValidationError):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token.") from None
 

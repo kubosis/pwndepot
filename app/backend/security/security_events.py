@@ -2,9 +2,8 @@
 from datetime import datetime, timezone
 from enum import Enum
 
-from sqlalchemy import select
-
 from app.backend.db.models import SecurityDevice
+from sqlalchemy import select
 
 
 class SecurityEventType(str, Enum):

@@ -21,8 +21,11 @@ class BackendBaseSettings(BaseSettings):
 
     COOKIE_DOMAIN: str | None = None
 
+    LOGO_PATH: Path = Path("/project/assets/pwndepot_standard.png")
+
     # REQUIRED FOR TEAM INVITES (Fix)
-    FRONTEND_DOMAIN: str = decouple.config("FRONTEND_DOMAIN", default="http://localhost:5173")
+    FRONTEND_DOMAIN: str = decouple.config("FRONTEND_DOMAIN", default="http://localhost")
+    INVITE_EXCHANGE_TTL_SECONDS: int = 24 * 3600  # 24 hours
 
     # -----------------------------
     # ENVIRONMENT MODE (dev / prod)
@@ -30,6 +33,12 @@ class BackendBaseSettings(BaseSettings):
     ENV: str = decouple.config("ENV", default="dev").lower()
     assert ENV in ["dev", "prod"], f"Error: Unknown ENV={ENV} setting, Aborting Server"
     DEBUG: bool = ENV == "dev"
+
+    TRUSTED_PROXY_IPS: str = decouple.config("TRUSTED_PROXY_IPS", default="")
+
+    @property
+    def TRUSTED_PROXY_IPS_LIST(self) -> list[str]:
+        return [x.strip() for x in self.TRUSTED_PROXY_IPS.split(",") if x.strip()]
 
     # -----------------------------
     # SQLALCHEMY CONNECTION STRINGS
@@ -70,7 +79,7 @@ class BackendBaseSettings(BaseSettings):
     # REDIS
     # -----------------------------
 
-    REDIS_URL: str = "redis://redis:6379/0"
+    REDIS_URL: str = decouple.config("REDIS_URL", default="redis://localhost:6379/0")
     ADMIN_MFA_TTL_SECONDS: int = 60
 
     # -----------------------------
@@ -88,14 +97,14 @@ class BackendBaseSettings(BaseSettings):
     # -----------------------------
     # CORS — dynamic by ENV
     # -----------------------------
-    ALLOWED_ORIGINS: str = decouple.config("ALLOWED_ORIGINS", default="http://localhost:5173")
+    ALLOWED_ORIGINS: str = decouple.config("ALLOWED_ORIGINS", default="http://localhost")
 
     @property
     def ALLOWED_ORIGINS_LIST(self) -> list[str]:
         return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
 
     ALLOWED_METHODS: list[str] = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-    ALLOWED_HEADERS: list[str] = ["Authorization", "Content-Type"]
+    ALLOWED_HEADERS: list[str] = ["Authorization", "Content-Type", "X-CSRF-Token"]
     IS_ALLOWED_CREDENTIALS: bool = True  # must stay true for cookies
 
     # -----------------------------
@@ -111,12 +120,24 @@ class BackendBaseSettings(BaseSettings):
     MAIL_FROM: str = decouple.config("MAIL_FROM")
     CONTACT_RECEIVER_EMAIL: str = decouple.config("CONTACT_RECEIVER_EMAIL")
 
+    SMTP_MAX_RETRIES: int = 3
+    SMTP_RETRY_DELAY_SECONDS: int = 2
+    UNVERIFIED_TTL_DAYS: int = 7
+    SPAM_WINDOW_MINUTES: int = 5
+
     # -----------------------------
     # JWT & SECURITY
     # -----------------------------
     JWT_ALGORITHM: str = decouple.config("JWT_ALGORITHM")
     JWT_SECRET_KEY: str = decouple.config("JWT_SECRET_KEY")
     JWT_HASHING_PEPPER: str | None = decouple.config("JWT_HASHING_PEPPER", default=None)
+    ADMIN_MFA_TTL: int = 60  # seconds
+
+    # -----------------------------
+    # SSE SETTINGS
+    # -----------------------------
+    MAX_SSE_CONNECTIONS_PER_IP: int = 3
+    SSE_CONN_TTL_SECONDS: int = 60
 
     # -----------------------------
     # API ROUTING
@@ -129,7 +150,7 @@ class BackendBaseSettings(BaseSettings):
     REDOC_URL: str | None = "/redoc" if ENV == "dev" else None
     OPENAPI_PREFIX: str = ""
 
-    MFA_TOKEN_EXPIRATION_MINS: int = decouple.config("JWT_HASHING_PEPPER", default=2)
+    MFA_TOKEN_EXPIRATION_MINS: int = decouple.config("MFA_TOKEN_EXPIRATION_MINS", default=2)
 
     # -----------------------------
     # COOKIE SECURITY (DEV vs PROD)
@@ -152,7 +173,7 @@ class BackendBaseSettings(BaseSettings):
 
     @property
     def COOKIE_HTTPONLY(self) -> bool:
-        return True  # always true — protects against XSS
+        return True  # always true - protects against XSS
 
     # -----------------------------
     # SECURITY VALIDATION

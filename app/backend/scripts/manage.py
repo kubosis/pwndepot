@@ -8,11 +8,10 @@ import asyncio
 from getpass import getpass
 
 import typer
-from sqlalchemy import select
-
 from app.backend.db.models import RoleEnum, UserTable
 from app.backend.db.session import AsyncSessionLocal
 from app.backend.security.password import PasswordManager
+from sqlalchemy import select
 
 app = typer.Typer()
 

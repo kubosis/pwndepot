@@ -21,7 +21,7 @@ function LegalNotice() {
       <p>Paweł Jamroziak, Jakub Sukdol, Balázs Vincze, Tóth Bertalan, Shane Samuel PRADEEP and Navin Rajendran</p>
 
       <h2>Hosting Provider</h2>
-      <p>Institut supérieur d’électronique de Paris, 10 Rue de Vanves, 92130 Issy-les-Moulineaux, +33 01 49 54 52 00</p>
+      <p>Hetzner Online GmbH, +49 (0)9831 505-0</p>
 
       <h2>Contact</h2>
       <p>e-mail: isepctfplatform@gmail.com</p>
@@ -29,7 +29,7 @@ function LegalNotice() {
       <h2>Purpose</h2>
       <p>
         The Platform is a non-commercial educational project carried out within the framework of the
-        Software Security subject at ISEP (Institut Supérieur d’Électronique de Paris).
+        Software Security subject at ISEP (Institut Supérieur d'Électronique de Paris).
       </p>
     </>
   );

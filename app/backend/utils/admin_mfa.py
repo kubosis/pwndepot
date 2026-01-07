@@ -3,7 +3,7 @@ from app.backend.config.settings import get_settings
 
 settings = get_settings()
 
-ADMIN_MFA_TTL = 60  # seconds
+ADMIN_MFA_TTL = settings.ADMIN_MFA_TTL
 
 
 def _key(admin_id: int) -> str:

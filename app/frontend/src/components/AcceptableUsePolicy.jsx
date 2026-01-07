@@ -11,7 +11,7 @@ function AcceptableUsePolicy() {
 
       <h2>Prohibited Actions</h2>
       <ul className="list-disc list-inside space-y-2">
-        <li>Attack, disrupt, or overload the Platform’s infrastructure.</li>
+        <li>Attack, disrupt, or overload the Platform's infrastructure.</li>
         <li>Use the Platform to attack or exploit third-party systems.</li>
         <li>Upload, share, or distribute malware or harmful content.</li>
         <li>Engage in harassment, cheating, or abusive behavior toward other users.</li>

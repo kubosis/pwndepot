@@ -1,30 +1,33 @@
 from email.message import EmailMessage
 from email.utils import make_msgid
-from pathlib import Path
-
-from loguru import logger
 
 from app.backend.config.settings import get_settings
 from app.backend.utils.mail_template import reset_password_email_html, verification_email_html
 from app.backend.utils.mailer import send_email
+from loguru import logger
 
 settings = get_settings()
 
 # -----------------------------
 # PATH TO LOGO
 # -----------------------------
-LOGO_PATH = Path("/project/assets/pwndepot_standard.png")
-
+LOGO_PATH = settings.LOGO_PATH
 
 # -----------------------------
 # CONTACT EMAIL
 # -----------------------------
+def _strip_crlf(s: str) -> str:
+    return s.replace("\r", "").replace("\n", "")
 def send_contact_email(*, name: str, email: str, message: str) -> bool:
+    name = _strip_crlf(name)
+    email = _strip_crlf(email)
     msg = EmailMessage()
-    msg["Subject"] = f"[CONTACT] Message from {name}"
+    safe_name = name.replace("\r", "").replace("\n", "")
+    safe_email = email.replace("\r", "").replace("\n", "")
+    msg["Subject"] = f"[CONTACT] Message from {safe_name}"
     msg["From"] = settings.MAIL_FROM
     msg["To"] = settings.CONTACT_RECEIVER_EMAIL
-    msg["Reply-To"] = email
+    msg["Reply-To"] = safe_email
 
     msg.set_content(
         f"""New contact message:

@@ -1,6 +1,5 @@
-from pydantic import BaseModel
-
 from app.backend.db.models import StatusEnum
+from pydantic import BaseModel
 
 
 class AdminDeleteConfirm(BaseModel):

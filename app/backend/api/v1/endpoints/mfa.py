@@ -1,14 +1,11 @@
 from datetime import datetime, timedelta, timezone
 
 import pyotp
-from fastapi import APIRouter, HTTPException, Request, Response, status
-from sqlalchemy import func, select, update
-
 from app.backend.api.v1.deps import AsyncSessionDep, CurrentUserDep, PartiallyLoggedInUserDep
 from app.backend.config.redis import redis_client
 from app.backend.config.settings import get_settings
 from app.backend.db.models import MFABackupCodeTable, RefreshTokenTable, RoleEnum
-from app.backend.schema.mfa import MfaEnableRequest, MfaSetupResponse, MfaVerifyRequest
+from app.backend.schema.mfa import MfaEnableRequest, MfaResetRequest, MfaSetupResponse, MfaVerifyRequest
 from app.backend.security.geo_ip import resolve_country
 from app.backend.security.mfa_backup_codes import generate_backup_codes
 from app.backend.security.password import PasswordManager
@@ -18,6 +15,9 @@ from app.backend.security.tokens import create_jwt_access_token
 from app.backend.utils.admin_mfa import mark_admin_mfa_verified
 from app.backend.utils.device_fingerprint import build_device_fingerprint
 from app.backend.utils.limiter import limiter
+from app.backend.utils.limiter_keys import admin_key, mfa_verify_key
+from fastapi import APIRouter, HTTPException, Request, Response, status
+from sqlalchemy import func, select, update
 
 settings = get_settings()
 
@@ -68,8 +68,8 @@ async def enable_mfa(payload: MfaEnableRequest, session: AsyncSessionDep, user: 
     return {"message": "MFA enabled successfully.", "backup_codes": backup_codes}
 
 
-@limiter.limit("5/minute")
 @router.post("/verify")
+@limiter.limit("5/minute", key_func=mfa_verify_key)
 async def verify_mfa_login(
     request: Request,
     payload: MfaVerifyRequest,
@@ -163,8 +163,8 @@ async def verify_mfa_login(
     return {"message": "MFA verification successful. Logged in."}
 
 
-@limiter.limit("5/minute")
 @router.post("/admin/verify")
+@limiter.limit("5/minute", key_func=admin_key)
 async def verify_admin_mfa(
     request: Request,
     payload: MfaVerifyRequest,
@@ -211,12 +211,20 @@ async def verify_admin_mfa(
 
 @limiter.limit("5/minute")
 @router.post("/reset")
-async def reset_mfa(request: Request, session: AsyncSessionDep, user: CurrentUserDep):
+async def reset_mfa(request: Request, response: Response, payload: MfaResetRequest, session: AsyncSessionDep, user: CurrentUserDep):
     if not user.mfa_enabled:
         raise HTTPException(400, "MFA not enabled")
 
     if not user.token_data.get("mfa_recovery"):
         raise HTTPException(403, "Recovery session required")
+
+    # verify current password
+    pwd = PasswordManager()
+    if not pwd.verify_password(payload.password, user.hashed_password):
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "INVALID_PASSWORD", "message": "Invalid password"},
+        )
 
     user.mfa_enabled = False
     user.mfa_secret = None
@@ -225,8 +233,19 @@ async def reset_mfa(request: Request, session: AsyncSessionDep, user: CurrentUse
         update(MFABackupCodeTable).where(MFABackupCodeTable.user_id == user.id).values(used_at=func.now())
     )
 
+    # revoke refresh tokens (force logout everywhere)
+    await session.execute(
+        update(RefreshTokenTable)
+        .where(RefreshTokenTable.user_id == user.id)
+        .values(revoked=True)
+    )
+
     session.add(user)
     await session.commit()
+
+    # clear cookies (force logout in browser)
+    response.delete_cookie("access_token", path="/", domain=settings.COOKIE_DOMAIN)
+    response.delete_cookie("refresh_token", path="/api/v1/users/auth/refresh", domain=settings.COOKIE_DOMAIN)
 
     country = resolve_country(request)
 

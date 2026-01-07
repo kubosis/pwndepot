@@ -1,7 +1,6 @@
 import datetime
 
 import pydantic
-
 from app.backend.utils.formatters import format_datetime_into_isoformat
 
 

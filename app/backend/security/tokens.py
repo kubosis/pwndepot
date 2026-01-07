@@ -1,8 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
 import jwt
-from jwt import ExpiredSignatureError, PyJWTError
-
 from app.backend.config.settings import get_settings
 from app.backend.security.exceptions import (
     EmailVerificationTokenExpired,
@@ -10,6 +8,7 @@ from app.backend.security.exceptions import (
     PasswordResetTokenExpired,
     PasswordResetTokenInvalid,
 )
+from jwt import ExpiredSignatureError, PyJWTError
 
 settings = get_settings()
 

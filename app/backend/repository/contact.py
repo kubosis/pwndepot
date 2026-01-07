@@ -1,13 +1,15 @@
 import hashlib
 from datetime import datetime, timedelta, timezone
 
+from app.backend.config.settings import get_settings
+from app.backend.db.models import ContactMessageTable
+from app.backend.schema.contact import ContactRequest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.backend.db.models import ContactMessageTable
-from app.backend.schema.contact import ContactRequest
+settings = get_settings()
 
-SPAM_WINDOW_MINUTES = 5
+SPAM_WINDOW_MINUTES = settings.SPAM_WINDOW_MINUTES
 
 
 def _hash_contact(email: str, message: str) -> str:

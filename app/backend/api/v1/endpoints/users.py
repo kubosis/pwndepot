@@ -4,26 +4,21 @@ Prefix: /api/v1/users
 - *POST /api/v1/users/register* – create a new user account (*password stored hashed + salted*)
 - *POST /api/v1/users/login* – user login; returns JWT
 - *POST /api/v1/users/logout* – logout user (invalidate token or clear session)
-- *POST /api/v1/users/update/{user_id}* – change current user’s password / email / name
 - *GET  /api/v1/users/profile/:userId* – get authenticated user’s profile including historical scores
 - *GET  /api/v1/users* – list all users (admin only)
 - *DELETE /api/v1/users/:id* – delete a user (admin only)
 """
 
 import asyncio
+import contextlib
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from typing import Annotated
 
 import fastapi
-from fastapi import BackgroundTasks, Depends, HTTPException, Request, status
-from fastapi.responses import JSONResponse
-from fastapi.security import OAuth2PasswordRequestForm
-from loguru import logger
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
-
+import pyotp
 from app.backend.api.v1.deps import (
+    AsyncSessionDep,
     CurrentAdminDep,
     CurrentUserDep,
     RequireAdminNonRecovery,
@@ -36,8 +31,10 @@ from app.backend.db.models import RefreshTokenTable, RoleEnum, StatusEnum, UserT
 from app.backend.db.session import get_async_session
 from app.backend.schema.admin import AdminDeleteConfirm
 from app.backend.schema.users import (
+    PublicUserProfile,
     ResendVerificationRequest,
     ResetPasswordRequest,
+    SelfDeleteRequest,
     UserInCreate,
     UserInResponse,
     UserInUpdate,
@@ -48,6 +45,7 @@ from app.backend.security.exceptions import (
     PasswordResetTokenInvalid,
 )
 from app.backend.security.geo_ip import resolve_country
+from app.backend.security.password import PasswordManager
 from app.backend.security.refresh_tokens import generate_refresh_token
 from app.backend.security.security_events import SecurityEventType, emit_security_event, is_new_device
 from app.backend.security.tokens import (
@@ -71,7 +69,14 @@ from app.backend.utils.email_validation import (
 )
 from app.backend.utils.exceptions import DBEntityDoesNotExist
 from app.backend.utils.limiter import limiter
+from app.backend.utils.limiter_keys import forgot_password_key, login_key, resend_verification_key, reset_password_key
 from app.backend.utils.mail import send_reset_password_email, send_verification_email
+from fastapi import BackgroundTasks, Depends, HTTPException, Request, Response, status
+from fastapi.responses import JSONResponse
+from fastapi.security import OAuth2PasswordRequestForm
+from loguru import logger
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = fastapi.APIRouter(tags=["users"])
 settings = get_settings()
@@ -93,8 +98,89 @@ def _construct_user_in_response(
         team_id=team_id,
         team_name=team_name,
         token_data=getattr(user, "token_data", None),
+        mfa_enabled=bool(user.mfa_enabled),
     )
 
+
+# -----------------------------
+# DELETE USER ACCOUNT(BY HIMSELF)
+# -----------------------------
+@router.post("/me/delete", status_code=status.HTTP_200_OK, dependencies=[Depends(RequireNonRecoverySession)])
+@limiter.limit("2/minute")
+async def delete_my_account(
+    request: Request,
+    payload: SelfDeleteRequest,
+    response: Response,
+    session: AsyncSessionDep,
+    user: CurrentUserDep,
+    account_repo: UserRepositoryDep,
+):
+    # 1) Verify password
+    if not payload.password or not payload.password.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "PASSWORD_REQUIRED", "message": "Password is required"},
+        )
+
+    pwd = PasswordManager()
+    if not pwd.verify_password(payload.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "INVALID_PASSWORD", "message": "Invalid password"},
+        )
+
+    # 2) If MFA enabled -> REQUIRE TOTP code (NO backup codes allowed)
+    if user.mfa_enabled:
+        if not payload.mfa_code or not payload.mfa_code.strip():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"code": "MFA_REQUIRED", "message": "MFA code required"},
+            )
+
+        if not user.mfa_secret:
+            # DB inconsistent state
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"code": "MFA_MISCONFIGURED", "message": "MFA enabled but secret missing"},
+            )
+
+        totp = pyotp.TOTP(user.mfa_secret)
+        if not totp.verify(payload.mfa_code, valid_window=1):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"code": "INVALID_MFA", "message": "Invalid MFA code"},
+            )
+
+    # 3) Revoke refresh tokens (logout everywhere)
+    await session.execute(
+        update(RefreshTokenTable)
+        .where(RefreshTokenTable.user_id == user.id)
+        .values(revoked=True)
+    )
+
+    # 4) Delete the account (repo handles errors/consistency)
+    await account_repo.delete_account_by_id(user.id)
+
+    await session.commit()
+
+    # 5) Clear cookies (logout in browser)
+    response.delete_cookie("access_token", path="/", domain=settings.COOKIE_DOMAIN)
+    response.delete_cookie("refresh_token", path="/api/v1/users/auth/refresh", domain=settings.COOKIE_DOMAIN)
+
+    # 6) Emit security event (best-effort)
+    country = resolve_country(request)
+    try:
+        await emit_security_event(
+            user=user,
+            event=SecurityEventType.ACCOUNT_DELETED,
+            request=request,
+            extra={"country": country},
+        )
+    except Exception:
+        # Don't block deletion if logging fails
+        contextlib.suppress(Exception)
+
+    return {"message": "Account deleted successfully"}
 
 # -----------------------------
 # SECURE REGISTRATION
@@ -142,7 +228,7 @@ async def create_user(
 # FORGOT PASSWORD
 # -----------------------------
 @router.post("/forgot-password", status_code=200)
-@limiter.limit("2/minute")
+@limiter.limit("2/minute", key_func=forgot_password_key)
 async def forgot_password(
     request: Request,
     payload: ResendVerificationRequest,  # use email
@@ -152,8 +238,11 @@ async def forgot_password(
     email = payload.email.lower()
     user = await account_repo.read_account_by_email(email)
 
+    if not user:
+        return {"message": "If the account exists, a reset link was sent"}
+
     # Always the same response (anti-enumeration), Admin accounts cannot use public password reset
-    if user and user.role == RoleEnum.ADMIN:
+    if user.role == RoleEnum.ADMIN:
         logger.warning(f"Password reset attempt for ADMIN account: {email}")
         return {"message": "If the account exists, a reset link was sent"}
 
@@ -166,8 +255,8 @@ async def forgot_password(
 # -----------------------------
 # RESET PASSWORD
 # -----------------------------
-@router.post("/reset-password", status_code=200, dependencies=[Depends(RequireNonRecoverySession)])
-@limiter.limit("2/minute")
+@router.post("/reset-password", status_code=200)
+@limiter.limit("2/minute", key_func=reset_password_key)
 async def reset_password(
     request: Request,
     payload: ResetPasswordRequest,
@@ -236,7 +325,9 @@ async def verify_reset_password_token(
 # VERIFY EMAIL
 # -----------------------------
 @router.get("/verify-email")
+@limiter.limit("10/minute")
 async def verify_email(
+    request: Request,
     token: str,
     account_repo: UserRepositoryDep,
 ):
@@ -277,7 +368,7 @@ async def verify_email(
 # RESEND VERIFICATION EMAIL
 # -----------------------------
 @router.post("/resend-verification", status_code=status.HTTP_200_OK)
-@limiter.limit("1/minute")
+@limiter.limit("1/minute", key_func=resend_verification_key)
 async def resend_verification_email(
     request: Request,
     payload: ResendVerificationRequest,
@@ -326,13 +417,12 @@ async def get_users(
 # SECURE LOGIN USING HTTPONLY COOKIE
 # -----------------------------
 @router.post("/login", status_code=status.HTTP_200_OK)
-@limiter.limit("5/minute")
+@limiter.limit("5/minute", key_func=login_key)
 async def login_for_access_token(
     request: Request,
     login_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     account_repo: UserRepositoryDep,
     async_session: AsyncSession = Depends(get_async_session),
-    admin: bool = False,
 ):
     # 1. Get the User from DB
     login_email = login_data.username.lower()
@@ -342,24 +432,21 @@ async def login_for_access_token(
         logger.warning(f"Failed login attempt for email={login_email}")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 
-    if admin and db_user.role != RoleEnum.ADMIN:
-        logger.warning(f"Unauthorized admin login attempt by {db_user.username}")
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Not sufficient rights")
-
     # 2. Verify Password
     if not account_repo.pwd_manager.verify_password(login_data.password, db_user.hashed_password):
         logger.warning(f"Failed login attempt for email={login_email}")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 
     # 2.5 Block admin on login
-    if not admin and db_user.role == RoleEnum.ADMIN:
+    if db_user.role == RoleEnum.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": "ADMIN_LOGIN_FORBIDDEN",
-                "message": "Admins must use the admin panel to log in",
+                "message": "Admins must use Admin Panel Login",
             },
         )
+
 
     # 3. Email verification & account status check
     if not db_user.is_email_verified:
@@ -471,12 +558,98 @@ async def login_for_access_token(
 
     return response
 
+# -----------------------------
+# ADMIN: SPECIAL LOGIN ENDPOINT FOR ADMINS
+# -----------------------------
+@router.post("/admin/login", status_code=status.HTTP_200_OK)
+@limiter.limit("3/minute", key_func=login_key)
+async def admin_login_for_access_token(
+    request: Request,
+    login_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    account_repo: UserRepositoryDep,
+    async_session: AsyncSession = Depends(get_async_session),
+):
+    login_email = login_data.username.lower()
+    db_user = await account_repo.read_account_by_email(login_email)
+
+    if not db_user:
+        logger.warning(f"Failed admin login attempt for email={login_email}")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
+
+    if db_user.role != RoleEnum.ADMIN:
+        logger.warning(f"Non-admin tried to use admin login: {login_email}")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Not sufficient rights")
+
+    if not account_repo.pwd_manager.verify_password(login_data.password, db_user.hashed_password):
+        logger.warning(f"Failed admin login attempt for email={login_email}")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
+
+    if db_user.status != StatusEnum.ACTIVE:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Your account has been suspended")
+
+    # Admin login: if MFA Turned on - always partial cookie(mfv: False)
+    if db_user.mfa_enabled:
+        access_token = create_jwt_access_token({"sub": str(db_user.id), "mfv": False})
+        response = JSONResponse({"message": "MFA required", "mfa_required": True})
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=settings.COOKIE_HTTPONLY,
+            secure=settings.COOKIE_SECURE,
+            samesite=settings.COOKIE_SAMESITE,
+            path="/",
+            domain=settings.COOKIE_DOMAIN,
+        )
+        return response
+
+    # Full login (MFA disabled)
+    access_token = create_jwt_access_token({"sub": str(db_user.id), "mfv": True})
+
+    raw_refresh, hashed_refresh, refresh_expires, family_id = generate_refresh_token()
+    async_session.add(
+        RefreshTokenTable(
+            user_id=db_user.id,
+            token_hash=hashed_refresh,
+            expires_at=refresh_expires,
+            family_id=family_id,
+        )
+    )
+    await async_session.commit()
+
+    expiry_date = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    response = JSONResponse({"message": "Login successful", "mfa_required": False})
+
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=settings.COOKIE_HTTPONLY,
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE,
+        expires=expiry_date,
+        path="/",
+        domain=settings.COOKIE_DOMAIN,
+    )
+
+    response.set_cookie(
+        key="refresh_token",
+        value=raw_refresh,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE,
+        expires=refresh_expires,
+        path="/api/v1/users/auth/refresh",
+        domain=settings.COOKIE_DOMAIN,
+    )
+
+    return response
+
+
 
 # -----------------------------
 # REFRESH ACCESS TOKEN
 # -----------------------------
 @router.post("/auth/refresh", status_code=status.HTTP_200_OK)
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def refresh_access_token(request: Request, async_session: AsyncSession = Depends(get_async_session)):
     raw_token = request.cookies.get("refresh_token")
     if not raw_token:
@@ -519,7 +692,7 @@ async def refresh_access_token(request: Request, async_session: AsyncSession = D
     await async_session.commit()
 
     # new access token
-    access_token = create_jwt_access_token({"sub": str(stored.user_id)})
+    access_token = create_jwt_access_token({"sub": str(stored.user_id), "mfv": True})
 
     response = JSONResponse({"message": "Token refreshed"})
 
@@ -604,9 +777,11 @@ async def change_user_status(
 # -----------------------------
 # GET USER PROFILE BY USERNAME, not user ID because it's more friendly
 # -----------------------------
-@router.get("/profile/{username}", response_model=UserInResponse)
+@router.get("/profile/{username}", response_model=PublicUserProfile)
+@limiter.limit("30/minute")
 async def get_user_profile(
     username: str,
+    request: Request,
     account_repo: UserRepositoryDep,
     team_repo: TeamsRepositoryDep,
 ):
@@ -616,8 +791,9 @@ async def get_user_profile(
 
     team = await team_repo.get_team_for_user(user.id)
 
-    return _construct_user_in_response(
-        user,
+    return PublicUserProfile(
+        id=user.id,
+        username=user.username,
         team_id=team.id if team else None,
         team_name=team.name if team else None,
     )
@@ -627,7 +803,8 @@ async def get_user_profile(
 # CURRENT AUTHENTICATED USER
 # -----------------------------
 @router.get("/me", response_model=UserInResponse)
-async def get_me(current_user: CurrentUserDep, team_repo: TeamsRepositoryDep):
+@limiter.limit("120/minute")
+async def get_me(current_user: CurrentUserDep, team_repo: TeamsRepositoryDep, request: Request):
     team = await team_repo.get_team_for_user(current_user.id)
 
     return _construct_user_in_response(
@@ -635,7 +812,6 @@ async def get_me(current_user: CurrentUserDep, team_repo: TeamsRepositoryDep):
         team_id=team.id if team else None,
         team_name=team.name if team else None,
     )
-
 
 # -----------------------------
 # UPDATE USER
@@ -655,7 +831,6 @@ async def update_user(
     logger.warning(f"ADMIN ACTION: {current_admin.username} updated user_id={user_id}")
 
     return _construct_user_in_response(updated)
-
 
 # -----------------------------
 # DELETE USER (ADMIN)
@@ -710,15 +885,16 @@ async def delete_user(
 # LOGOUT — CLEAR COOKIE
 # -----------------------------
 @router.post("/logout", status_code=status.HTTP_200_OK)
-async def logout_user(current_user: CurrentUserDep, async_session: AsyncSession = Depends(get_async_session)):
+@limiter.limit("30/minute")
+async def logout_user(request: Request, current_user: CurrentUserDep, async_session: AsyncSession = Depends(get_async_session)):
     stmt = update(RefreshTokenTable).where(RefreshTokenTable.user_id == current_user.id).values(revoked=True)
     await async_session.execute(stmt)
     await async_session.commit()
     await clear_admin_mfa(current_user.id)
 
     response = JSONResponse({"message": "Logout successful"})
-    response.delete_cookie("access_token", path="/")
-    response.delete_cookie("refresh_token", path="/api/v1/users/auth/refresh")
+    response.delete_cookie("access_token", path="/", domain=settings.COOKIE_DOMAIN)
+    response.delete_cookie("refresh_token", path="/api/v1/users/auth/refresh", domain=settings.COOKIE_DOMAIN)
 
     logger.info(f"User {current_user.username} logged out")
     return response
