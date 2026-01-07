@@ -1,0 +1,7 @@
+name: "Web Stack Overflow"
+difficulty: "Medium"
+category: "Pwn"
+points: 250
+author: "shaneSamuelPradeep"
+description: "A minimal HTTP service contains a classic stack buffer overflow
+              in its POST handler. Find a way to redirect execution to print the flag."
