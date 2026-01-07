@@ -10,12 +10,13 @@ Prefix: /api/v1/users
 - *DELETE /api/v1/users/:id* – delete a user (admin only)
 """
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from typing import Annotated
 
 import fastapi
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from loguru import logger
@@ -25,22 +26,52 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.backend.api.v1.deps import (
     CurrentAdminDep,
     CurrentUserDep,
+    RequireAdminNonRecovery,
+    RequireNonRecoverySession,
     TeamsRepositoryDep,
     UserRepositoryDep,
 )
 from app.backend.config.settings import get_settings
-from app.backend.db.models import RefreshTokenTable, RoleEnum, UserTable
+from app.backend.db.models import RefreshTokenTable, RoleEnum, StatusEnum, UserTable
 from app.backend.db.session import get_async_session
 from app.backend.schema.admin import AdminDeleteConfirm
-from app.backend.schema.users import AdminPasswordChange, UserInCreate, UserInResponse, UserInUpdate
+from app.backend.schema.users import (
+    ResendVerificationRequest,
+    ResetPasswordRequest,
+    UserInCreate,
+    UserInResponse,
+    UserInUpdate,
+    UserStatusUpdate,
+)
+from app.backend.security.exceptions import (
+    PasswordResetTokenExpired,
+    PasswordResetTokenInvalid,
+)
+from app.backend.security.geo_ip import resolve_country
 from app.backend.security.refresh_tokens import generate_refresh_token
-from app.backend.security.tokens import create_jwt_access_token
+from app.backend.security.security_events import SecurityEventType, emit_security_event, is_new_device
+from app.backend.security.tokens import (
+    EmailVerificationTokenExpired,
+    EmailVerificationTokenInvalid,
+    create_email_verification_token,
+    create_jwt_access_token,
+    create_password_reset_token,
+    decode_email_verification_token,
+    decode_password_reset_token,
+)
+from app.backend.utils.admin_mfa import (
+    clear_admin_mfa,
+    consume_admin_mfa,
+    is_admin_mfa_valid,
+)
+from app.backend.utils.device_fingerprint import build_device_fingerprint
 from app.backend.utils.email_validation import (
     has_mx_record,
     is_trusted_email,
 )
 from app.backend.utils.exceptions import DBEntityDoesNotExist
 from app.backend.utils.limiter import limiter
+from app.backend.utils.mail import send_reset_password_email, send_verification_email
 
 router = fastapi.APIRouter(tags=["users"])
 settings = get_settings()
@@ -56,20 +87,27 @@ def _construct_user_in_response(
         id=user.id,
         username=user.username,
         role=user.role,
+        status=user.status,
         created_at=user.created_at,
         is_verified=user.is_email_verified,
         team_id=team_id,
         team_name=team_name,
+        token_data=getattr(user, "token_data", None),
     )
 
 
 # -----------------------------
 # SECURE REGISTRATION
 # -----------------------------
+
+
 @router.post("/register", status_code=status.HTTP_201_CREATED)
+@limiter.limit("5/minute")
 async def create_user(
+    request: Request,
     user: UserInCreate,
     account_repo: UserRepositoryDep,
+    background_tasks: BackgroundTasks,
 ):
     email = user.email.lower()
     domain = email.split("@")[-1]
@@ -93,8 +131,179 @@ async def create_user(
         logger.info(f"New user registered: username={db_user.username}, email={db_user.email}")
     else:
         logger.error(f"User registration failed for email={user.email}")
-        raise HTTPException(status.HTTP_409_CONFLICT, "User with this email already exists.")
+        raise HTTPException(status.HTTP_409_CONFLICT, "User already exists.")
+    verification_token = create_email_verification_token(email)
+    await asyncio.sleep(1)  # slight delay to avoid not sending email
+    background_tasks.add_task(send_verification_email, email=email, token=verification_token)
     return _construct_user_in_response(db_user)
+
+
+# -----------------------------
+# FORGOT PASSWORD
+# -----------------------------
+@router.post("/forgot-password", status_code=200)
+@limiter.limit("2/minute")
+async def forgot_password(
+    request: Request,
+    payload: ResendVerificationRequest,  # use email
+    account_repo: UserRepositoryDep,
+    background_tasks: BackgroundTasks,
+):
+    email = payload.email.lower()
+    user = await account_repo.read_account_by_email(email)
+
+    # Always the same response (anti-enumeration), Admin accounts cannot use public password reset
+    if user and user.role == RoleEnum.ADMIN:
+        logger.warning(f"Password reset attempt for ADMIN account: {email}")
+        return {"message": "If the account exists, a reset link was sent"}
+
+    token = create_password_reset_token(email)
+    background_tasks.add_task(send_reset_password_email, email, token)
+
+    return {"message": "If the account exists, a reset link was sent"}
+
+
+# -----------------------------
+# RESET PASSWORD
+# -----------------------------
+@router.post("/reset-password", status_code=200, dependencies=[Depends(RequireNonRecoverySession)])
+@limiter.limit("2/minute")
+async def reset_password(
+    request: Request,
+    payload: ResetPasswordRequest,
+    account_repo: UserRepositoryDep,
+    async_session: AsyncSession = Depends(get_async_session),
+):
+    data = decode_password_reset_token(payload.token)
+    email = data["sub"]
+
+    user = await account_repo.read_account_by_email(email)
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    if user.role == RoleEnum.ADMIN:
+        logger.warning(f"Password reset blocked for ADMIN account: {email}")
+        # behave as if reset succeeded (anti-enumeration)
+        return {"message": "Password reset successful"}
+
+    # Check if new password is same as old password
+    if account_repo.pwd_manager.verify_password(
+        payload.password,
+        user.hashed_password,
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "PASSWORD_REUSE",
+                "message": "New password must be different from the old password",
+            },
+        )
+
+    hashed = account_repo.pwd_manager.hash_password(payload.password)
+
+    await async_session.execute(update(UserTable).where(UserTable.id == user.id).values(hashed_password=hashed))
+
+    # revoke all refresh tokens
+    await async_session.execute(
+        update(RefreshTokenTable).where(RefreshTokenTable.user_id == user.id).values(revoked=True)
+    )
+
+    await async_session.commit()
+
+    return {"message": "Password reset successful"}
+
+
+# -----------------------------
+# VERIFY RESET PASSWORD
+# -----------------------------
+@router.get("/reset-password/verify", status_code=200)
+@limiter.limit("5/minute")
+async def verify_reset_password_token(
+    request: Request,
+    token: str,
+):
+    try:
+        decode_password_reset_token(token)
+    except PasswordResetTokenExpired:
+        raise HTTPException(status_code=410, detail="Reset token expired") from None
+    except PasswordResetTokenInvalid:
+        raise HTTPException(status_code=400, detail="Invalid reset token") from None
+
+    return {"valid": True}
+
+
+# -----------------------------
+# VERIFY EMAIL
+# -----------------------------
+@router.get("/verify-email")
+async def verify_email(
+    token: str,
+    account_repo: UserRepositoryDep,
+):
+    try:
+        payload = decode_email_verification_token(token)
+    except EmailVerificationTokenExpired:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail={
+                "code": "TOKEN_EXPIRED",
+                "message": "Verification link has expired",
+            },
+        ) from None
+    except EmailVerificationTokenInvalid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "TOKEN_INVALID",
+                "message": "Invalid verification token",
+            },
+        ) from None
+
+    email = payload["sub"]
+
+    user = await account_repo.read_account_by_email(email)
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    if user.is_email_verified:
+        return {"message": "Email already verified"}
+
+    await account_repo.mark_email_verified(user.id)
+
+    return {"message": "Email verified successfully"}
+
+
+# -----------------------------
+# RESEND VERIFICATION EMAIL
+# -----------------------------
+@router.post("/resend-verification", status_code=status.HTTP_200_OK)
+@limiter.limit("1/minute")
+async def resend_verification_email(
+    request: Request,
+    payload: ResendVerificationRequest,
+    account_repo: UserRepositoryDep,
+    background_tasks: BackgroundTasks,
+):
+    # normalize
+    email = payload.email.lower()
+
+    user = await account_repo.read_account_by_email(email)
+    if not user:
+        # security: we don't reveal whether the email is registered
+        return {"message": "If the account exists, a verification email was sent"}
+
+    if user.is_email_verified:
+        return {"message": "Email already verified"}
+
+    token = create_email_verification_token(email)
+
+    background_tasks.add_task(
+        send_verification_email,
+        email=email,
+        token=token,
+    )
+
+    return {"message": "Verification email sent"}
 
 
 # -----------------------------
@@ -126,7 +335,7 @@ async def login_for_access_token(
     admin: bool = False,
 ):
     # 1. Get the User from DB
-    login_email = login_data.username
+    login_email = login_data.username.lower()
     db_user = await account_repo.read_account_by_email(login_email)
 
     if not db_user:
@@ -142,6 +351,36 @@ async def login_for_access_token(
         logger.warning(f"Failed login attempt for email={login_email}")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 
+    # 2.5 Block admin on login
+    if not admin and db_user.role == RoleEnum.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "ADMIN_LOGIN_FORBIDDEN",
+                "message": "Admins must use the admin panel to log in",
+            },
+        )
+
+    # 3. Email verification & account status check
+    if not db_user.is_email_verified:
+        logger.warning(f"Login attempt with unverified email: {db_user.email}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "EMAIL_NOT_VERIFIED",
+                "message": "Please verify your email address before logging in",
+            },
+        )
+
+    if db_user.status != StatusEnum.ACTIVE:
+        logger.warning(f"Login attempt for inactive account: {db_user.email}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "ACCOUNT_SUSPENDED",
+                "message": "Your account has been suspended",
+            },
+        )
     # ==================================================================
     # PATH A: MFA IS ENABLED (Intermediate Step)
     # ==================================================================
@@ -173,6 +412,20 @@ async def login_for_access_token(
     # ==================================================================
 
     logger.info(f"User {db_user.email} logged in successfully.")
+
+    fingerprint = build_device_fingerprint(request)
+
+    country = resolve_country(request)
+
+    if await is_new_device(async_session, db_user.id, fingerprint):
+        await emit_security_event(
+            user=db_user,
+            event=SecurityEventType.LOGIN_NEW_DEVICE,
+            request=request,
+            extra={
+                "country": country,
+            },
+        )
 
     # Create FULL Access Token
     token_data = {"sub": str(db_user.id), "mfv": True}
@@ -297,6 +550,57 @@ async def refresh_access_token(request: Request, async_session: AsyncSession = D
     return response
 
 
+## Suspend user account
+@router.put(
+    "/{user_id}/status", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(RequireAdminNonRecovery)]
+)
+async def change_user_status(
+    user_id: int,
+    payload: UserStatusUpdate,
+    account_repo: UserRepositoryDep,
+    current_admin: CurrentAdminDep,
+    async_session: AsyncSession = Depends(get_async_session),
+):
+    if current_admin.id == user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Admin cannot change their own account status",
+        )
+
+    if not payload.password or not payload.password.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Admin password is required",
+        )
+
+    if not account_repo.pwd_manager.verify_password(
+        payload.password,
+        current_admin.hashed_password,
+    ):
+        raise HTTPException(403, "Invalid admin password")
+
+    if current_admin.mfa_enabled:
+        ok = await is_admin_mfa_valid(current_admin.id)
+        if not ok:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"code": "MFA_REQUIRED"},
+            )
+
+    await account_repo.set_status(user_id, payload.status)
+
+    if payload.status == StatusEnum.SUSPENDED:
+        await async_session.execute(
+            update(RefreshTokenTable).where(RefreshTokenTable.user_id == user_id).values(revoked=True)
+        )
+        await async_session.commit()
+
+    logger.warning(f"ADMIN ACTION: {current_admin.username} set status={payload.status.value} for user_id={user_id}")
+
+    if current_admin.mfa_enabled:
+        await consume_admin_mfa(current_admin.id)
+
+
 # -----------------------------
 # GET USER PROFILE BY USERNAME, not user ID because it's more friendly
 # -----------------------------
@@ -336,7 +640,7 @@ async def get_me(current_user: CurrentUserDep, team_repo: TeamsRepositoryDep):
 # -----------------------------
 # UPDATE USER
 # -----------------------------
-@router.put("/update/{user_id}", response_model=UserInResponse)
+@router.put("/update/{user_id}", response_model=UserInResponse, dependencies=[Depends(RequireAdminNonRecovery)])
 async def update_user(
     user_id: int,
     user_update: UserInUpdate,
@@ -354,39 +658,18 @@ async def update_user(
 
 
 # -----------------------------
-# UPDATE PASSWORD (ADMIN)
-# -----------------------------
-@router.put("/{user_id}/password", status_code=status.HTTP_204_NO_CONTENT)
-async def admin_change_user_password(
-    user_id: int,
-    payload: AdminPasswordChange,
-    account_repo: UserRepositoryDep,
-    current_admin: CurrentAdminDep,
-):
-    if current_admin.id == user_id:
-        raise HTTPException(
-            status_code=403,
-            detail="Admins cannot change their own password via this endpoint",
-        )
-
-    await account_repo.change_password_by_admin(
-        user_id=user_id,
-        new_password=payload.new_password,
-    )
-
-    logger.warning(f"ADMIN ACTION: {current_admin.username} changed password for user_id={user_id}")
-
-
-# -----------------------------
 # DELETE USER (ADMIN)
 # -----------------------------
-@router.delete("/{user_id}", response_model=dict)
+@router.delete("/{user_id}", response_model=dict, dependencies=[Depends(RequireAdminNonRecovery)])
 async def delete_user(
     user_id: int,
     payload: AdminDeleteConfirm,
     account_repo: UserRepositoryDep,
     current_admin: CurrentAdminDep,
 ):
+    if not payload.password or not payload.password.strip():
+        raise HTTPException(status_code=400, detail="Admin password is required")
+
     if not account_repo.pwd_manager.verify_password(
         payload.password,
         current_admin.hashed_password,
@@ -395,6 +678,14 @@ async def delete_user(
             status_code=403,
             detail="Invalid admin password",
         )
+
+    if current_admin.mfa_enabled:
+        ok = await is_admin_mfa_valid(current_admin.id)
+        if not ok:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"code": "MFA_REQUIRED"},
+            )
 
     if current_admin.id == user_id:
         raise HTTPException(
@@ -410,6 +701,8 @@ async def delete_user(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="User with specified id does not exist"
         ) from None
+    if current_admin.mfa_enabled:
+        await consume_admin_mfa(current_admin.id)
     return {"message": f"User {user_id} deleted successfully"}
 
 
@@ -421,6 +714,7 @@ async def logout_user(current_user: CurrentUserDep, async_session: AsyncSession 
     stmt = update(RefreshTokenTable).where(RefreshTokenTable.user_id == current_user.id).values(revoked=True)
     await async_session.execute(stmt)
     await async_session.commit()
+    await clear_admin_mfa(current_user.id)
 
     response = JSONResponse({"message": "Logout successful"})
     response.delete_cookie("access_token", path="/")

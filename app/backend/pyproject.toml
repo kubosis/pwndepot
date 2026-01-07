@@ -37,11 +37,12 @@ dependencies = [
     "alembic>=1.17.1",
     "aiosqlite>=0.21.0",
     "typer>=0.20.0",
+    "redis>=5.0",
     "Pyjwt>=2.10.1",
     "python-multipart>=0.0.20",
     "loguru>=0.7.3",
     "slowapi>=0.1.9",
-    "psycopg2>=2.9.11",
+    "psycopg2-binary>=2.9.11",
     "pyotp>=2.9.0",
 ]
 

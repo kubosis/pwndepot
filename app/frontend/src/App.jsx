@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 
 import Navbar from "./components/Navbar";
@@ -11,11 +11,10 @@ import TermsOfService from "./components/TermsOfService";
 import AcceptableUsePolicy from "./components/AcceptableUsePolicy";
 import PrivacyPolicy from "./components/PrivacyPolicy";
 import LegalNotice from "./components/LegalNotice";
-import ForgotPassword from "./components/forgotpassword";
+import ResetPassword from "./components/ResetPassword";
 import Profile from "./components/Profile";
 import JoinTeam from "./components/JoinTeam";
 import AdminPage from "./components/AdminPage";
-import ChangePassword from "./components/ChangePassword";
 import NotFound from "./components/NotFound";
 import TeamPage from "./components/TeamPage";
 import ChallengesPage from "./components/ChallengesPage";
@@ -24,6 +23,8 @@ import DemoBanner from "./components/DemoBanner";
 import CaptainPanel from "./components/CaptainPanel";
 import MfaVerify from "./components/MfaVerify";
 import MfaSetup from "./components/MfaSetup";
+import VerifyEmail from "./components/VerifyEmail";
+import MfaReset from "./components/MfaReset";
 
 import { api } from "./config/api";
 import { DEMO_MODE } from "./config/demo";
@@ -96,7 +97,13 @@ function AppContent() {
           setIsAdminLoggedIn(true);
         }
       })
-      .catch(() => {
+      .catch((err) => {
+        const code = err.response?.data?.detail?.code;
+
+        if (code === "MFA_REQUIRED") {
+          return;
+        }
+
         setLoggedInUser(null);
         setIsAdminLoggedIn(false);
       })
@@ -104,6 +111,7 @@ function AppContent() {
         setAuthLoading(false);
       });
   }, []);
+
 
   // Admin login / logout events
   useEffect(() => {
@@ -193,9 +201,11 @@ function AppContent() {
       )}
 
       <main
-        className={`flex-grow pt-40 overflow-y-auto px-4 md:px-8 lg:px-16 ${
-          showBanner ? "blurred" : ""
-        }`}
+        className={`flex-grow overflow-y-auto px-4 md:px-8 lg:px-16 ${
+          loggedInUser?.token_data?.mfa_recovery
+            ? "pt-32"   // navbar + MFA banner
+            : "pt-24"   // navbar
+        } ${showBanner ? "blurred" : ""}`}
       >
         <Routes>
           {/* Public routes */}
@@ -206,9 +216,9 @@ function AppContent() {
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/legal-notice" element={<LegalNotice />} />
           <Route path="/contact" element={<Contact />} />
-          <Route path="/profile/:username" element={<Profile />} />
           <Route path="/challenges" element={<ChallengesPage />} />
           <Route path="/join-team" element={<JoinTeam />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
 
           {/* Auth routes */}
           <Route
@@ -225,7 +235,16 @@ function AppContent() {
               )
             }
           />
-          <Route path="/forgotpassword" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={< ResetPassword />} />
+
+          <Route
+            path="/mfa/reset"
+            element={
+              <ProtectedRoute>
+                <MfaReset setLoggedInUser={setLoggedInUser} />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Protected routes */}
           <Route
@@ -241,6 +260,14 @@ function AppContent() {
             element={
               <ProtectedRoute>
                 <TeamPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile/:username"
+            element={
+              <ProtectedRoute>
+                <Profile loggedInUser={loggedInUser} />
               </ProtectedRoute>
             }
           />
@@ -261,14 +288,6 @@ function AppContent() {
             loggedInUser={loggedInUser}
             setLoggedInUser={setLoggedInUser}
             />
-            }
-          />
-          <Route
-            path="/admin/change-password/:userId"
-            element={
-              <AdminRoute>
-                <ChangePassword isAdminLoggedIn={isAdminLoggedIn} />
-              </AdminRoute>
             }
           />
 
@@ -319,7 +338,7 @@ function AppContent() {
         </p>
 
         <p className="opacity-80">
-          © 2025 ISEP CTF Platform – All Rights Reserved
+          © 2025 PwnDepot – All Rights Reserved
         </p>
       </footer>
     </>

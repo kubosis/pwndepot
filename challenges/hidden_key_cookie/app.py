@@ -4,6 +4,7 @@ from PIL import Image
 
 app = Flask(__name__)
 
+
 def get_secret_from_png():
     try:
         im = Image.open("static/logo.png")
@@ -11,8 +12,10 @@ def get_secret_from_png():
     except Exception:
         return None
 
+
 def sign(username, key):
     return hmac.new(key.encode(), username.encode(), hashlib.sha256).hexdigest()
+
 
 INDEX_HTML = """
 <!doctype html>
@@ -62,13 +65,16 @@ INDEX_HTML = """
 </html>
 """
 
+
 @app.route("/")
 def index():
     return render_template_string(INDEX_HTML)
 
+
 @app.route("/static/<path:filename>")
 def static_files(filename):
     return send_from_directory("static", filename)
+
 
 @app.route("/flag")
 def flag():
@@ -76,7 +82,7 @@ def flag():
     sess = request.cookies.get("session", "")
     if "|" not in sess:
         return "Invalid session cookie", 400
-    username, provided = sess.split("|",1)
+    username, provided = sess.split("|", 1)
 
     key = get_secret_from_png()
     if not key:
@@ -87,6 +93,7 @@ def flag():
         # default flag if CTF_FLAG not provided
         return os.environ.get("CTF_FLAG", "ISEP{You_f0und_th3_s3cr3t!}")
     return "Access denied", 403
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)

@@ -47,12 +47,14 @@ TRUSTED_EMAIL_DOMAINS = {
     # Tutanota
     "tutanota.com",
     "tutanota.de",
-    # Yandex (opcjonalne)
+    # tuta.com,
+    "tuta.io",
+    # Yandex
     "yandex.com",
     "yandex.ru",
     "yandex.ua",
     "yandex.kz",
-    # Mail.ru (opcjonalne)
+    # Mail.ru
     "mail.ru",
     "inbox.ru",
     "list.ru",

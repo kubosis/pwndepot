@@ -20,7 +20,7 @@ export default function Home({ ctfActive }) {
           <>
             {/* Displayed when CTF is active */}
             <h1 className="text-4xl md:text-6xl font-bold mb-4">
-              Welcome to the CTF Platform!
+              Welcome to the PwnDepot!
             </h1>
             <p className="text-lg md:text-2xl mb-6">
               Solve challenges, learn and compete with other teams.

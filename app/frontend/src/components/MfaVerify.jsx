@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../config/api";
 
@@ -7,9 +7,12 @@ export default function MfaVerify({ setLoggedInUser }) {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
 
   const handleVerify = async (e) => {
     e.preventDefault();
+    if (loading) return;
+
     setLoading(true);
     setError("");
 
@@ -17,11 +20,22 @@ export default function MfaVerify({ setLoggedInUser }) {
       // 1. Send code to backend
       await api.post("/mfa/verify", { code });
 
-      // 2. If successful, fetch full user profile
-      const profileRes = await api.get("/users/me");
-      setLoggedInUser(profileRes.data);
+      // 2. Get /users/me
+      const meRes = await api.get("/users/me");
 
-      navigate("/"); // Go to dashboard
+      console.log("MFA VERIFY /users/me =", meRes.data);
+
+      // 3. Save to global state
+      setLoggedInUser(meRes.data);
+
+      // 4. Success Message
+      setSuccessMessage("MFA verification successful. Logging you in...");
+
+      // 5. Redirect
+      setTimeout(() => {
+        navigate("/", { replace: true });
+      }, 1200);
+      
     } catch (err) {
       console.error(err);
       setError("Invalid code. Please try again.");
@@ -41,11 +55,17 @@ export default function MfaVerify({ setLoggedInUser }) {
         <form onSubmit={handleVerify}>
           <input
             type="text"
-            placeholder="000000"
-            maxLength="6"
+            placeholder="123456 or backup code"
             value={code}
-            onChange={(e) => setCode(e.target.value)}
+            onChange={(e) =>
+              setCode(
+                e.target.value
+                  .toUpperCase()
+                  .replace(/\s/g, "")
+              )
+            }
             className="text-center tracking-widest text-xl"
+            autoComplete="one-time-code"
             required
           />
 
@@ -55,6 +75,7 @@ export default function MfaVerify({ setLoggedInUser }) {
         </form>
 
         {error && <p className="error-text fade-in">{error}</p>}
+        {successMessage && <p className="success-text fade-in">{successMessage}</p>}
       </div>
     </div>
   );
