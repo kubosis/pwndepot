@@ -3,16 +3,15 @@ import secrets
 import string
 
 import sqlalchemy
+from app.backend.db.models import TeamTable, UserCompletedChallengeTable, UserInTeamTable, UserTable
+from app.backend.repository.base import BaseCRUDRepository
+from app.backend.schema.teams import TeamInCreate
+from app.backend.security.password import PasswordManager
 from loguru import logger
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
-
-from app.backend.db.models import TeamTable, UserCompletedChallengeTable, UserInTeamTable, UserTable
-from app.backend.repository.base import BaseCRUDRepository
-from app.backend.schema.teams import TeamInCreate
-from app.backend.security.password import PasswordManager
 
 
 async def _generate_unique_join_code(async_session: AsyncSession) -> str:
@@ -113,12 +112,14 @@ class TeamsCRUDRepository(BaseCRUDRepository):
             return None, False
         return team, team.captain_user_id == user.id
 
-    # -------------------------------------------------------
-    # REGENERATE INVITE TOKEN
+   # -------------------------------------------------------
+    # REGENERATE INVITE TOKEN (+ JOIN CODE)
     # -------------------------------------------------------
     async def regenerate_invite_token(self, team: TeamTable):
         team.invite_token = secrets.token_urlsafe(32)
+        team.join_code = await _generate_unique_join_code(async_session=self.async_session)
         await self.async_session.commit()
+        await self.async_session.refresh(team)
         return team.invite_token
 
     # -------------------------------------------------------
@@ -166,6 +167,11 @@ class TeamsCRUDRepository(BaseCRUDRepository):
     async def join_team(self, team: TeamTable, user: UserTable):
         query = await self.async_session.execute(select(UserInTeamTable).where(UserInTeamTable.user_id == user.id))
         if query.scalar():
+            return None
+
+        # SAFETY CHECK: team size limit
+        if len(team.user_associations) >= 6:
+            logger.warning(f"Join blocked: team id={team.id} is full (members={len(team.user_associations)})")
             return None
 
         new_assoc = UserInTeamTable(user_id=user.id, team_id=team.id)
