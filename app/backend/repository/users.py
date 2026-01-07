@@ -1,13 +1,13 @@
 import typing
 
 import sqlalchemy
-from fastapi import HTTPException, status
 from loguru import logger
+from sqlalchemy import func, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import functions as sqlalchemy_functions
 
-from app.backend.db.models import UserTable
+from app.backend.db.models import StatusEnum, UserTable
 from app.backend.repository.base import BaseCRUDRepository
 from app.backend.schema.users import UserInCreate, UserInUpdate
 from app.backend.security.password import PasswordManager
@@ -134,25 +134,34 @@ class UserCRUDRepository(BaseCRUDRepository):
             raise DBEntityAlreadyExists("Username or email already taken") from e
 
     # -----------------------------
-    async def change_password_by_admin(
-        self,
-        user_id: int,
-        new_password: str,
-    ) -> None:
-        user = await self.async_session.get(UserTable, user_id)
+    async def set_status(self, user_id: int, status: StatusEnum):
+        stmt = update(UserTable).where(UserTable.id == user_id).values(status=status)
 
-        if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        result = await self.async_session.execute(stmt)
+        if result.rowcount == 0:
+            raise DBEntityDoesNotExist()
 
-        # Block password reuse
-        if self.pwd_manager.verify_password(new_password, user.hashed_password):
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                "New password must be different from the current password",
-            )
-
-        user.hashed_password = self.pwd_manager.hash_password(new_password)
         await self.async_session.commit()
+
+    # -----------------------------
+    async def mark_email_verified(self, user_id: int) -> bool:
+        stmt = (
+            update(UserTable)
+            .where(
+                UserTable.id == user_id,
+                UserTable.is_email_verified.is_(False),  # only if not verified yet
+            )
+            .values(
+                is_email_verified=True,
+                email_verified_at=func.now(),  # time from DB
+            )
+            .execution_options(synchronize_session=False)
+        )
+
+        result = await self.async_session.execute(stmt)
+        await self.async_session.commit()
+
+        return result.rowcount == 1
 
     # -----------------------------
     async def delete_account_by_id(self, id: int) -> None:

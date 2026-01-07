@@ -1,3 +1,5 @@
+from pydantic import constr
+
 from app.backend.schema.base import BaseSchemaModel
 
 
@@ -7,9 +9,13 @@ class MfaSetupResponse(BaseSchemaModel):
 
 
 class MfaEnableRequest(BaseSchemaModel):
-    secret: str
-    code: str
+    secret: constr(min_length=16, max_length=128)
+    code: constr(min_length=6, max_length=16)
 
 
 class MfaVerifyRequest(BaseSchemaModel):
-    code: str
+    code: constr(min_length=6, max_length=16)
+
+
+class MfaResetRequest(BaseSchemaModel):
+    password: constr(min_length=12, max_length=128)

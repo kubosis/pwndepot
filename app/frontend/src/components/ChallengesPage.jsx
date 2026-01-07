@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { api } from "../config/api"; // Ensure this is configured for axios
@@ -68,10 +68,10 @@ function ChallengeModal({ challenge, onClose, username }) {
 
   // 1. Check if instance is already running when modal opens
   useEffect(() => {
-    if (!challenge.is_download && !DEMO_MODE) {
-      checkInstanceStatus();
+    if (challenge.is_download) {
+      checkInstanceStatus()
     }
-  }, [challenge.id]);
+  }, [checkInstanceStatus, challenge.is_download])
 
   // 2. Timer Countdown Logic
   useEffect(() => {
@@ -90,9 +90,9 @@ function ChallengeModal({ challenge, onClose, username }) {
       clearInterval(timerRef.current);
     }
     return () => clearInterval(timerRef.current);
-  }, [instance, timeLeft]);
+  }, [instance, timeLeft, checkInstanceStatus]);
 
-  const checkInstanceStatus = async () => {
+  const checkInstanceStatus = useCallback(async () => {
     try {
       const res = await api.get(`/challenges/${challenge.id}/instance`);
       if (res.data.is_running && res.data.connection) {
@@ -104,7 +104,7 @@ function ChallengeModal({ challenge, onClose, username }) {
     } catch (err) {
       console.error("Failed to check instance", err);
     }
-  };
+  }, [challenge.id]);
 
   const handleSpawn = async () => {
     setIsLoading(true);
@@ -145,7 +145,8 @@ function ChallengeModal({ challenge, onClose, username }) {
       const downloadUrl = `${api.defaults.baseURL || "/api/v1"}/challenges/${challenge.id}/download`;
       window.open(downloadUrl, "_blank");
     } catch (err) {
-      setFeedback({ msg: "Download failed.", type: "error" });
+      console.error(err)
+      setFeedback({ msg: "Download failed.", type: "error" })
     }
   };
 

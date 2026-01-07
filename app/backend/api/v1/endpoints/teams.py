@@ -22,20 +22,40 @@
 ##
 ##
 
+import json
+import secrets
+
 import fastapi
 from fastapi import Body, HTTPException, status
 from loguru import logger
+from starlette.requests import Request
 
 from app.backend.api.v1.deps import CurrentUserDep, TeamsRepositoryDep, UserRepositoryDep
+from app.backend.config.redis import redis_client
 from app.backend.config.settings import get_settings
-from app.backend.schema.teams import FullTeamInResponse, TeamInCreate, TeamJoinViaInvite
+from app.backend.schema.teams import (
+    FullTeamInResponse,
+    TeamInCreate,
+    TeamInviteExchangeRequest,
+    TeamInviteExchangeResponse,
+    TeamJoinViaExchange,
+)
 from app.backend.security.tokens import create_team_invite_token, decode_team_invite_token
+from app.backend.utils.limiter import limiter
+
+
+def _invite_exchange_key(code: str) -> str:
+    return f"teams:invite_exchange:{code}"
+
 
 router = fastapi.APIRouter(tags=["teams"])
 settings = get_settings()
 
 
-async def _construct_full_team_response(team, team_repo, include_invite=True):
+INVITE_EXCHANGE_TTL_SECONDS = settings.INVITE_EXCHANGE_TTL_SECONDS
+
+
+async def _construct_full_team_response(team, team_repo, include_invite: bool = False) -> FullTeamInResponse:
     # team: TeamTable
     # get scores records
     scores = await team_repo.get_team_scores(team.id)
@@ -95,9 +115,11 @@ async def assert_captain(team_repo, team_id, user):
 # CREATE TEAM
 # -------------------------------------------------------
 @router.post("/create", response_model=FullTeamInResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/minute")
 async def create_team(
     team_in_create: TeamInCreate,
     team_repo: TeamsRepositoryDep,
+    request: Request,
     current_user: CurrentUserDep,
 ):
     # only users without team can create a team
@@ -118,7 +140,8 @@ async def create_team(
 # REGENERATE INVITE (CAPTAIN OR ADMIN)
 # -------------------------------------------------------
 @router.post("/actions/{team_name}/regen-invite")
-async def regen_invite(team_name: str, current_user: CurrentUserDep, team_repo: TeamsRepositoryDep):
+@limiter.limit("5/minute")
+async def regen_invite(team_name: str, current_user: CurrentUserDep, team_repo: TeamsRepositoryDep, request: Request):
     team = await team_repo.read_team_by_name(team_name)
     if not team:
         raise HTTPException(404, "Team not found")
@@ -135,8 +158,10 @@ async def regen_invite(team_name: str, current_user: CurrentUserDep, team_repo: 
 # CHANGE TEAM PASSWORD (CAPTAIN OR ADMIN)
 # -------------------------------------------------------
 @router.put("/actions/{team_name}/password", response_model=dict, status_code=status.HTTP_200_OK)
+@limiter.limit("5/minute")
 async def change_password(
     team_name: str,
+    request: Request,
     new_password: str = Body(...),
     account_password: str = Body(...),
     current_user: CurrentUserDep = None,
@@ -155,6 +180,13 @@ async def change_password(
     # ensure user is captain or admin
     await assert_captain(team_repo, team.id, current_user)
 
+    # NEW: block reuse
+    if await team_repo.verify_team_password(team, new_password):
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "TEAM_PASSWORD_REUSE", "message": "New team password must be different"},
+        )
+
     # update team password
     await team_repo.update_password(team, new_password)
 
@@ -165,9 +197,11 @@ async def change_password(
 # DELETE TEAM (CAPTAIN OR ADMIN)
 # -------------------------------------------------------
 @router.delete("/actions/{team_name}", response_model=dict, status_code=status.HTTP_200_OK)
+@limiter.limit("10/minute")
 async def delete_team_by_id(
     team_name: str,
     current_user: CurrentUserDep,
+    request: Request,
     team_repo: TeamsRepositoryDep,
     team_password: str = Body(..., embed=True),
 ):
@@ -193,40 +227,57 @@ async def delete_team_by_id(
 # -------------------------------------------------------
 # JOIN TEAM
 # -------------------------------------------------------
-@router.post("/join", response_model=dict)
-async def join_team_invite(
-    payload: TeamJoinViaInvite,
+
+
+@router.post("/join-exchange", response_model=dict)
+@limiter.limit("10/minute")
+async def join_team_exchange(
+    payload: TeamJoinViaExchange,
+    request: Request,
     current_user: CurrentUserDep,
     team_repo: TeamsRepositoryDep,
 ):
-    # 1. Decode and validate token
+    key = _invite_exchange_key(payload.exchange_code)
+
+    # ONE-TIME read + delete
+    raw = await redis_client.get(key)
+    if not raw:
+        raise HTTPException(400, "Exchange code invalid or expired")
+
+    # (one-time) - minimal variant
+    await redis_client.delete(key)
+
     try:
-        data = decode_team_invite_token(payload.token)
-    except Exception as err:
-        raise HTTPException(400, "Invalid or expired invite link") from err
+        data = json.loads(raw)
+        team_id = int(data["team_id"])
+        exchange_join_code = data.get("join_code")
+    except Exception:
+        raise HTTPException(400, "Exchange code invalid") from None
 
-    team_id = data["team_id"]
-
-    # 2. Fetch the team
+    # Fetch team
     team = await team_repo.read_team_by_id(team_id)
     if not team:
         raise HTTPException(404, "Team not found")
 
-    # enforce max 5 users
+    # revoke exchanges created from old invites
+    if not exchange_join_code or exchange_join_code != team.join_code:
+        raise HTTPException(400, "Exchange code invalid or expired")
+
+    # enforce max 6 users
     if len(team.user_associations) >= 6:
         raise HTTPException(400, "Team is full (maximum 6 members).")
 
-    # 3. Ensure user is not already in a team
+    # Ensure user is not already in a team
     existing = await team_repo.get_team_for_user(current_user.id)
     if existing:
         raise HTTPException(400, "User already in a team")
 
-    # 4. Verify password
+    # Verify password
     ok = await team_repo.verify_team_password(team, payload.password)
     if not ok:
         raise HTTPException(401, "Incorrect team password")
 
-    # 5. Join the team
+    # Join team
     joined = await team_repo.join_team(team, current_user)
     if not joined:
         raise HTTPException(400, "Unable to join team")
@@ -235,31 +286,81 @@ async def join_team_invite(
 
 
 @router.get("/join")
-async def preview_invite_link(token: str, team_repo: TeamsRepositoryDep):
+@limiter.limit("30/minute")
+async def preview_invite_link(token: str, team_repo: TeamsRepositoryDep, request: Request):
     """
     Validate invite token and return the team name for preview.
     Used by frontend before user enters password.
     """
-
     try:
         data = decode_team_invite_token(token)
     except Exception as err:
         raise HTTPException(400, "Invalid or expired invite link") from err
 
-    team_id = data["team_id"]
-    team = await team_repo.read_team_by_id(team_id)
+    team_id = data.get("team_id")
+    token_join_code = data.get("join_code")
 
+    if not team_id or not token_join_code:
+        raise HTTPException(400, "Invalid or expired invite link")
+
+    team = await team_repo.read_team_by_id(team_id)
     if not team:
         raise HTTPException(404, "Team not found")
 
+    # CRITICAL: revoke old links after regen
+    if token_join_code != team.join_code:
+        raise HTTPException(400, "Invalid or expired invite link")
+
     return {"team_name": team.name}
+
+
+@router.post("/invite/exchange", response_model=TeamInviteExchangeResponse)
+@limiter.limit("30/minute")
+async def invite_exchange(
+    payload: TeamInviteExchangeRequest,
+    request: Request,
+    team_repo: TeamsRepositoryDep,
+):
+    # 1) validate token
+    try:
+        data = decode_team_invite_token(payload.token)
+    except Exception:
+        raise HTTPException(400, "Invalid or expired invite token") from None
+
+    team_id = data.get("team_id")
+    token_join_code = data.get("join_code")
+
+    if not team_id or not token_join_code:
+        raise HTTPException(400, "Invalid or expired invite token")
+
+    team = await team_repo.read_team_by_id(team_id)
+    if not team:
+        raise HTTPException(404, "Team not found")
+
+    # CRITICAL: revoke old tokens after regen
+    if token_join_code != team.join_code:
+        raise HTTPException(400, "Invalid or expired invite token")
+
+    # 2) generate short code
+    code = secrets.token_urlsafe(24)  # ~32-40 chars
+
+    # 3) save mapping in redis (TTL 60s)
+    value = {"team_id": team_id, "join_code": token_join_code}
+    await redis_client.set(
+        _invite_exchange_key(code),
+        json.dumps(value),
+        ex=INVITE_EXCHANGE_TTL_SECONDS,
+    )
+
+    return {"exchange_code": code}
 
 
 # -------------------------------------------------------
 # LEAVE TEAM
 # -------------------------------------------------------
 @router.put("/leave", response_model=dict, status_code=status.HTTP_200_OK)
-async def leave_current_team(current_user: CurrentUserDep, team_repo: TeamsRepositoryDep):
+@limiter.limit("10/minute")
+async def leave_current_team(current_user: CurrentUserDep, team_repo: TeamsRepositoryDep, request: Request):
     # Get team info
     team = await team_repo.get_team_for_user(current_user.id)
     if not team:
@@ -285,8 +386,10 @@ async def leave_current_team(current_user: CurrentUserDep, team_repo: TeamsRepos
 # TRANSFER CAPTAIN ROLE
 # -------------------------------------------------------
 @router.post("/actions/{team_name}/transfer-captain", response_model=dict)
+@limiter.limit("5/minute")
 async def transfer_captain(
     team_name: str,
+    request: Request,
     new_captain_username: str = Body(..., embed=True),
     current_user: CurrentUserDep = None,
     team_repo: TeamsRepositoryDep = None,
@@ -323,23 +426,25 @@ async def transfer_captain(
 # GET MY TEAM
 # -------------------------------------------------------
 @router.get("/myteam", response_model=FullTeamInResponse, status_code=status.HTTP_200_OK)
-async def get_my_team(current_user: CurrentUserDep, team_repo: TeamsRepositoryDep):
+@limiter.limit("120/minute")
+async def get_my_team(current_user: CurrentUserDep, team_repo: TeamsRepositoryDep, request: Request):
     team = await team_repo.get_team_for_user(current_user.id)
     if not team:
         raise HTTPException(404, "User has no active team")
 
-    return await _construct_full_team_response(team, team_repo)
+    return await _construct_full_team_response(team, team_repo, include_invite=False)
 
 
 # -------------------------------------------------------
 # LIST ALL TEAMS
 # -------------------------------------------------------
 @router.get("", response_model=list[FullTeamInResponse], status_code=status.HTTP_200_OK)
-async def list_teams(team_repo: TeamsRepositoryDep):
+@limiter.limit("30/minute")
+async def list_teams(team_repo: TeamsRepositoryDep, request: Request):
     teams = await team_repo.list_all_teams()
     response = []
     for t in teams:
-        response.append(await _construct_full_team_response(t, team_repo))
+        response.append(await _construct_full_team_response(t, team_repo, include_invite=False))
 
     return response
 
@@ -348,9 +453,26 @@ async def list_teams(team_repo: TeamsRepositoryDep):
 # GET TEAM BY NAME
 # -------------------------------------------------------
 @router.get("/by-name/{team_name}", response_model=FullTeamInResponse)
-async def get_team_by_name(team_name: str, team_repo: TeamsRepositoryDep):
+@limiter.limit("30/minute")
+async def get_team_by_name(team_name: str, team_repo: TeamsRepositoryDep, request: Request):
     team = await team_repo.read_team_by_name(team_name)
     if not team:
         raise HTTPException(404, "Team with specified name does not exist")
 
-    return await _construct_full_team_response(team, team_repo)
+    return await _construct_full_team_response(team, team_repo, include_invite=False)
+
+
+@router.get("/myteam/invite", response_model=dict, status_code=status.HTTP_200_OK)
+@limiter.limit("30/minute")
+async def get_my_team_invite(current_user: CurrentUserDep, team_repo: TeamsRepositoryDep, request: Request):
+    team = await team_repo.get_team_for_user(current_user.id)
+    if not team:
+        raise HTTPException(404, "User has no active team")
+
+    # only captain and admin may get invite link
+    if current_user.role.value != "admin" and current_user.id != team.captain_user_id:
+        raise HTTPException(403, "Only captain may view invite link")
+
+    token = create_team_invite_token(team.id, team.join_code)
+    invite_url = f"{settings.FRONTEND_DOMAIN}/join-team?token={token}"
+    return {"invite_url": invite_url}

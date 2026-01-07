@@ -1,4 +1,3 @@
-from datetime import datetime
 from pathlib import Path
 
 from loguru import logger
@@ -23,32 +22,6 @@ class ChallengesCRUDRepository(BaseCRUDRepository):
         stmt = select(ChallengeTable).where(ChallengeTable.id == challenge_id)
         query = await self.async_session.execute(stmt)
         return query.scalar()
-
-    async def get_ctf_state(self, challenge_id: int) -> ChallengeTable | None:
-        # return the challenge row (which contains ctf_* fields)
-        return await self.read_challenge_by_id(challenge_id)
-
-    async def set_ctf_state(
-        self,
-        challenge_id: int,
-        active: bool,
-        ends_at: datetime | None,
-        started_by_user_id: int | None,
-        started_at: datetime | None,
-    ) -> ChallengeTable | None:
-        stmt = select(ChallengeTable).where(ChallengeTable.id == challenge_id)
-        q = await self.async_session.execute(stmt)
-        ch = q.scalar()
-        if not ch:
-            return None
-        ch.ctf_active = active
-        ch.ctf_ends_at = ends_at
-        ch.ctf_started_by_user_id = started_by_user_id
-        ch.ctf_started_at = started_at
-        self.async_session.add(ch)
-        await self.async_session.commit()
-        await self.async_session.refresh(ch)
-        return ch
 
     async def has_user_completed(self, user_id: int, challenge_id: int) -> bool:
         stmt = select(UserCompletedChallengeTable).where(

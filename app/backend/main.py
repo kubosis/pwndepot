@@ -3,14 +3,22 @@ import os
 import fastapi
 import uvicorn
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from slowapi.util import get_remote_address
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.backend.api.v1.router import api_router
 from app.backend.config.settings import BackendBaseSettings, get_settings
+from app.backend.middleware.ctf_gate import CTFGateMiddleware
+from app.backend.middleware.origin_check import OriginCheckMiddleware
+from app.backend.utils.ctf_redis import ctf_redis_bus
+from app.backend.utils.limiter import limiter
 from app.backend.utils.logging_config import setup_logging
+from app.backend.utils.redis_sse_listener import (
+    start_redis_sse_listener,
+    stop_redis_sse_listener,
+)
 
 
 def _create_fastapi_backend(app_settings: BackendBaseSettings) -> fastapi.FastAPI:
@@ -21,15 +29,51 @@ def _create_fastapi_backend(app_settings: BackendBaseSettings) -> fastapi.FastAP
     - Routers
     """
 
+    backend_app = fastapi.FastAPI(**app_settings.backend_app_attributes)
+
     # -----------------------------------------
-    # RATE LIMITING
+    # Redis - SSE bridge (MULTI-WORKER SAFE)
     # -----------------------------------------
-    limiter = Limiter(
-        key_func=get_remote_address,
-        default_limits=[f"{app_settings.RATE_LIMIT_PER_MINUTE}/minute"],
+    backend_app.add_event_handler(
+        "startup",
+        start_redis_sse_listener,
     )
 
-    backend_app = fastapi.FastAPI(**app_settings.backend_app_attributes)
+    backend_app.add_event_handler(
+        "shutdown",
+        stop_redis_sse_listener,
+    )
+
+    backend_app.add_event_handler("shutdown", ctf_redis_bus.close)
+
+    # -----------------------------------------
+    # CTF Gate (global lock when CTF ended)
+    # -----------------------------------------
+    backend_app.add_middleware(
+        CTFGateMiddleware,
+        allowlist_exact={
+            "/",
+            "/contact",
+            "/privacy-policy",
+            "/terms-of-service",
+            "/acceptable-use-policy",
+            "/legal-notice",
+        },
+        allowlist_prefixes=(
+            "/assets",
+            "/favicon",
+            "/robots.txt",
+            "/api/v1/mfa",
+            "/api/v1/ctf-status",
+        ),
+    )
+
+    # -----------------------------------------
+    # Rate limiting middleware
+    # -----------------------------------------
+    backend_app.state.limiter = limiter
+    backend_app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    backend_app.add_middleware(SlowAPIMiddleware)
 
     # -----------------------------------------
     # CORS — dynamic by environment
@@ -43,11 +87,23 @@ def _create_fastapi_backend(app_settings: BackendBaseSettings) -> fastapi.FastAP
     )
 
     # -----------------------------------------
-    # Rate limiting middleware
+    # CSRF / Origin check middleware
     # -----------------------------------------
-    backend_app.state.limiter = limiter
-    backend_app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-    backend_app.add_middleware(SlowAPIMiddleware)
+    backend_app.add_middleware(
+        OriginCheckMiddleware,
+        allowed_origins=app_settings.ALLOWED_ORIGINS_LIST,
+        # enabled=app_settings.ENV == "prod",
+    )
+
+    # -----------------------------------------
+    # Proxy headers (REAL IP) - only if behind trusted proxies
+    # -----------------------------------------
+    trusted = settings.TRUSTED_PROXY_IPS_LIST or ["127.0.0.1"]
+
+    backend_app.add_middleware(
+        ProxyHeadersMiddleware,
+        trusted_hosts=trusted,
+    )
 
     # -----------------------------------------
     # Routes
