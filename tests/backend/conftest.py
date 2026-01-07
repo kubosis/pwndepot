@@ -94,6 +94,10 @@ os.environ.setdefault("SMTP_PASSWORD", "test")
 os.environ.setdefault("MAIL_FROM", "test@localhost")
 os.environ.setdefault("CONTACT_RECEIVER_EMAIL", "admin@localhost")
 
+os.environ.setdefault(
+    "SQLALCHEMY_DATABASE_URL",
+    os.environ.get("SQLALCHEMY_SQLLITE_ASYNC_URL", "sqlite+aiosqlite:///./test.db"),
+)
 
 TEST_DB_URL = os.environ["SQLALCHEMY_DATABASE_URL"]
 
