@@ -17,13 +17,6 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from app.backend.api.v1 import deps
-from app.backend.db.base import Base
-from app.backend.main import app
-
-with suppress(Exception):
-    app.state.limiter.enabled = False
-
 os.environ.setdefault("ENV", "dev")
 os.environ.setdefault("DOCS_URL", "/docs")
 os.environ.setdefault("OPENAPI_URL", "/openapi.json")
@@ -42,6 +35,13 @@ os.environ.setdefault("FRONTEND_DOMAIN", "http://localhost:5173")
 
 TEST_DB_URL = os.environ["SQLALCHEMY_DATABASE_URL"]
 
+
+from app.backend.api.v1 import deps
+from app.backend.db.base import Base
+from app.backend.main import app
+
+with suppress(Exception):
+    app.state.limiter.enabled = False
 
 @pytest.fixture(scope="session")
 def event_loop():
