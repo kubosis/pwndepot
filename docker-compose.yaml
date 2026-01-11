@@ -14,7 +14,8 @@ services:
     build:
       context: .
       dockerfile: app/backend/Dockerfile
-    container_name:  pwndepot-backend:local
+    container_name:  pwndepot-backend
+    image:  pwndepot-backend:local
     volumes:
       - ./app/backend/alembic:/project/app/backend/alembic
       - ./challenges/deployment:/project/challenges/deployment
@@ -51,7 +52,8 @@ services:
     build:
       context: .
       dockerfile: app/frontend/Dockerfile
-    container_name: pwndepot-frontend:local
+    image: pwndepot-frontend:local
+    container_name: pwndepot-frontend
     expose:
       - "80"
     restart: unless-stopped
