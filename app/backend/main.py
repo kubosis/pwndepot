@@ -58,6 +58,7 @@ def _create_fastapi_backend(app_settings: BackendBaseSettings) -> fastapi.FastAP
             "/privacy-policy",
             "/terms-of-service",
             "/acceptable-use-policy",
+            "/dual-license",
             "/legal-notice",
             "/api/v1/users/logout",
             "/api/v1/users/logout/force",

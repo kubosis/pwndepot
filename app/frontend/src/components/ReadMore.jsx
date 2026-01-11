@@ -208,6 +208,9 @@ export default function ReadMore() {
                   <Link className="footer-link text-emerald-50/85" to="/privacy-policy">
                     Privacy policy
                   </Link>
+                  <Link className="footer-link text-emerald-50/85" to="/dual-license">
+                    Dual License
+                  </Link>
                 </div>
 
                 <div className="mt-6 rounded-xl border border-emerald-300/15 bg-black/20 p-4 text-emerald-50/75">

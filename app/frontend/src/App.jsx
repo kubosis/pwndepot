@@ -27,6 +27,7 @@ import VerifyEmail from "./components/VerifyEmail";
 import MfaReset from "./components/MfaReset";
 import ReadMore from "./components/ReadMore";
 import AccountDelete from "./components/AccountDelete";
+import DualLicense from "./components/DualLicense";
 
 import { api } from "./config/api";
 import { DEMO_MODE } from "./config/demo";
@@ -45,6 +46,7 @@ const PUBLIC_ALWAYS_OK = new Set([
   "/legal-notice",
   "/read-more",
   "/rankings",
+  "/dual-license",
 ]);
 
 const PUBLIC_PREFIX_OK = ["/profile/", "/team/"];
@@ -282,6 +284,7 @@ function AppContent() {
       "/terms-of-service",
       "/acceptable-use-policy",
       "/legal-notice",
+      "/dual-license",
     ];
 
     // Never show banner on legal pages
@@ -466,6 +469,7 @@ function AppContent() {
             <Route path="/verify-email" element={<CtfGate><VerifyEmail /> </CtfGate>} />
             <Route path="/team/:teamName"element={<TeamPage /> } />
             <Route path="/profile/:username" element={<Profile loggedInUser={loggedInUser} />} />
+            <Route path="/dual-license" element={<DualLicense />} />
 
             {/* ========================= */}
             {/* Auth routes (CTF only) */}
@@ -659,6 +663,9 @@ function AppContent() {
                     </a>
                     <a href="/legal-notice" className="footer-link">
                       Legal Notice / Mentions Légales
+                    </a>
+                    <a href="/dual-license" className="footer-link">
+                      Dual License
                     </a>
                   </div>
 
