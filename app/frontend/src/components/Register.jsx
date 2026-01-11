@@ -1,12 +1,16 @@
 // Register.jsx
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { evaluatePassword } from "../utils/passwordUtils";
 import { DEMO_MODE } from "../config/demo";
 import { api } from "../config/api";
+import { redirectIfLoggedIn } from "../utils/authRedirect";
 
 export default function Register() {
   const navigate = useNavigate();
+  useEffect(() => {
+    redirectIfLoggedIn(navigate);
+  }, [navigate]);
 
   // ---------------------------
   // Form state

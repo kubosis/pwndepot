@@ -57,7 +57,7 @@ function PrivacyPolicy() {
         - Restrict or object to processing.<br/>
         - Request data portability.<br/>
         - Lodge a complaint with the Commission Nationale de l'Informatique et des Libertés (CNIL).<br/>
-        You may exercise your rights by contacting us at: <strong>isepctfplatform@gmail.com</strong>
+        You may exercise your rights by contacting us at: <strong>contact@pwndep0t.com</strong>
       </p>
     </>
   );

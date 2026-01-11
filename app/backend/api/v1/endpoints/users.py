@@ -29,6 +29,7 @@ from app.backend.api.v1.deps import (
     CurrentAdminDep,
     CurrentUserDep,
     RequireAdminNonRecovery,
+    RequireAnonymous,
     RequireNonRecoverySession,
     TeamsRepositoryDep,
     UserRepositoryDep,
@@ -69,6 +70,7 @@ from app.backend.utils.admin_mfa import (
     consume_admin_mfa,
     is_admin_mfa_valid,
 )
+from app.backend.utils.cookies import clear_auth_cookies
 from app.backend.utils.device_fingerprint import build_device_fingerprint
 from app.backend.utils.email_validation import (
     has_mx_record,
@@ -185,7 +187,7 @@ async def delete_my_account(
 # -----------------------------
 
 
-@router.post("/register", status_code=status.HTTP_201_CREATED)
+@router.post("/register", status_code=status.HTTP_201_CREATED, dependencies=[Depends(RequireAnonymous)])
 @limiter.limit("5/minute")
 async def create_user(
     request: Request,
@@ -414,7 +416,7 @@ async def get_users(
 # -----------------------------
 # SECURE LOGIN USING HTTPONLY COOKIE
 # -----------------------------
-@router.post("/login", status_code=status.HTTP_200_OK)
+@router.post("/login", status_code=status.HTTP_200_OK, dependencies=[Depends(RequireAnonymous)])
 @limiter.limit("5/minute", key_func=login_key)
 async def login_for_access_token(
     request: Request,
@@ -894,8 +896,17 @@ async def logout_user(
     await clear_admin_mfa(current_user.id)
 
     response = JSONResponse({"message": "Logout successful"})
-    response.delete_cookie("access_token", path="/", domain=settings.COOKIE_DOMAIN)
-    response.delete_cookie("refresh_token", path="/api/v1/users/auth/refresh", domain=settings.COOKIE_DOMAIN)
+    clear_auth_cookies(response)
 
     logger.info(f"User {current_user.username} logged out")
     return response
+
+
+# -----------------------------
+# LOGOUT — CLEAR COOKIE - FORCE (no token revocation)
+# -----------------------------
+@router.post("/logout/force", status_code=status.HTTP_200_OK)
+@limiter.limit("30/minute")
+async def logout_force(request: Request, response: Response):
+    clear_auth_cookies(response)
+    return {"message": "Logged out"}

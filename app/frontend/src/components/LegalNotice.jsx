@@ -24,7 +24,7 @@ function LegalNotice() {
       <p>Hetzner Online GmbH, +49 (0)9831 505-0</p>
 
       <h2>Contact</h2>
-      <p>e-mail: isepctfplatform@gmail.com</p>
+      <p>e-mail: contact@pwndep0t.com</p>
 
       <h2>Purpose</h2>
       <p>

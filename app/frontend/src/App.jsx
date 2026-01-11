@@ -36,6 +36,23 @@ if (import.meta.env.PROD && DEMO_MODE) {
   // console.error("Demo mode should not run in production");
 }
 
+const PUBLIC_ALWAYS_OK = new Set([
+  "/",
+  "/contact",
+  "/privacy-policy",
+  "/terms-of-service",
+  "/acceptable-use-policy",
+  "/legal-notice",
+  "/read-more",
+  "/rankings",
+]);
+
+const PUBLIC_PREFIX_OK = ["/profile/", "/team/"];
+
+const isPublicPath = (pathname) =>
+  PUBLIC_ALWAYS_OK.has(pathname) ||
+  PUBLIC_PREFIX_OK.some((p) => pathname.startsWith(p));
+
 function FullScreenLoader({ text = "Loading…" }) {
   return (
     <section className="relative w-screen left-1/2 -translate-x-1/2 overflow-x-clip min-h-screen -mt-24 pt-24 pb-16">
@@ -181,26 +198,30 @@ function AppContent() {
   }, [fetchCtfStatus]);
 
 
+  const loggedInUserRef = useRef(null);
+  useEffect(() => { loggedInUserRef.current = loggedInUser; }, [loggedInUser]);
+
   useEffect(() => {
-    const handler = () => {
-      // /admin has to work always
+    const handler = async () => {
       if (window.location.pathname.startsWith("/admin")) return;
 
-      // if no one is loged in do nothing
-      if (!loggedInUser) return;
+      const user = loggedInUserRef.current;
+      if (!user) return;
+      if (user.role === "admin") return;
 
-      // we don't log out admins
-      if (loggedInUser.role === "admin") return;
-
-      logout();
-      if (window.location.pathname !== "/") {
-        navigate("/", { replace: true });
+      try {
+        await api.post("/users/logout");
+      } catch {
+        try { await api.post("/users/logout/force"); } catch { /* ignore */ }
       }
+
+      setLoggedInUser(null);
+      if (window.location.pathname !== "/") navigate("/", { replace: true });
     };
 
     window.addEventListener("auth-logout", handler);
     return () => window.removeEventListener("auth-logout", handler);
-  }, [loggedInUser, logout, navigate]);
+  }, [navigate]);
 
   useEffect(() => {
     if (DEMO_MODE) return;
@@ -365,17 +386,22 @@ function AppContent() {
   // Admin-only route
 
   // Single source of truth: auto logout + redirect when CTF is closed (users only)
+
   useEffect(() => {
     if (location.pathname.startsWith("/admin")) return;
     if (ctfActive === null) return;
 
     if (loggedInUser && loggedInUser.role !== "admin" && ctfActive === false) {
       logout();
-      if (location.pathname !== "/") {
+
+      const pathname = location.pathname;
+      const isPublic = isPublicPath(pathname);
+
+      if (!isPublic) {
         navigate("/", { replace: true });
       }
-    }
-  }, [ctfActive, loggedInUser, logout, navigate, location.pathname]);
+      }
+    }, [ctfActive, loggedInUser, logout, navigate, location.pathname]);
 
 
   const CtfGate = ({ children }) => {
