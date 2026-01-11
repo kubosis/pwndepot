@@ -7,7 +7,7 @@
 [![Code Quality](https://github.com/kubosis/pwndepot/actions/workflows/quality.yml/badge.svg)](https://github.com/kubosis/pwndepot/actions/workflows/quality.yml)
 [![React Version](https://img.shields.io/badge/react-18.2.0-61dafb.svg?logo=react&logoColor=white)](https://reactjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.95+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License](https://img.shields.io/badge/License-Apache--2.0%20OR%20Commercial-blue)](./LICENSE)
 
 ## 📌 Project Overview
 
@@ -100,5 +100,16 @@ To run the platform locally for development purposes:
 ---
 
 ## 📜 License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+This project is released under a **dual-license model**:
+
+- **Apache License 2.0** - for open-source, research, and educational use
+- **Commercial License** - required for commercial use, including paid training, courses, workshops, or hosted services
+
+You may choose either license.  
+See the full terms in the [LICENSE](LICENSE) file.
+
+For commercial licensing inquiries, contact:
+**kubosis, Electro5218**
+
 
