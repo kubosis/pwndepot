@@ -14,7 +14,7 @@ services:
     build:
       context: .
       dockerfile: app/backend/Dockerfile
-    container_name: fastapi_backend
+    container_name:  pwndepot-backend:local
     volumes:
       - ./app/backend/alembic:/project/app/backend/alembic
       - ./challenges/deployment:/project/challenges/deployment
@@ -51,7 +51,7 @@ services:
     build:
       context: .
       dockerfile: app/frontend/Dockerfile
-    container_name: frontend_app
+    container_name: pwndepot-frontend:local
     expose:
       - "80"
     restart: unless-stopped

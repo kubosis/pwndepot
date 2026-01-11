@@ -11,14 +11,17 @@
 import os
 
 import fastapi
-from fastapi import HTTPException, status
+import httpx
+from fastapi import HTTPException, Request, Response, status
 from fastapi.responses import FileResponse
 from loguru import logger
+from starlette.background import BackgroundTask
 
 from app.backend.api.v1.deps import ChallengesRepositoryDep, CurrentUserDep, TeamsRepositoryDep
 from app.backend.db.models import ChallengeTable
 from app.backend.schema.challenges import ChallengeInResponse, FlagSubmission
 from app.backend.schema.teams import TeamWithScoresInResponse
+from app.backend.utils.k8s_manager import K8sChallengeManager
 
 router = fastapi.APIRouter(tags=["challenges"])
 
@@ -27,7 +30,6 @@ def _construct_challenge_response(challenge: ChallengeTable) -> ChallengeInRespo
     return ChallengeInResponse(
         id=challenge.id,
         name=challenge.name,
-        path=challenge.path,
         description=challenge.description,
         hint=challenge.hint,
         is_download=challenge.is_download,
@@ -35,6 +37,100 @@ def _construct_challenge_response(challenge: ChallengeTable) -> ChallengeInRespo
         points=challenge.points,
         created_at=challenge.created_at,
     )
+
+
+@router.post("/{challenge_id}/spawn", status_code=status.HTTP_201_CREATED)
+async def spawn_challenge(challenge_id: int, current_user: CurrentUserDep, challenge_repo: ChallengesRepositoryDep):
+    ch = await challenge_repo.read_challenge_by_id(challenge_id)
+    if not ch or ch.is_download:  # Don't spawn for download-only challenges
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Challenge not found or not deployable")
+
+    image_name = ch.image
+    target_port = ch.port
+
+    # Spawn
+    # k8sManager is a singleton - it does not get reinitialized here
+    k8s_manager = K8sChallengeManager()
+    connection_info = k8s_manager.spawn_instance(
+        user_id=current_user.id, challenge_id=ch.id, image=image_name, port=target_port
+    )
+
+    if not connection_info:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to spawn instance")
+
+    return {"message": "Challenge spawned", "connection": connection_info}
+
+
+@router.post("/{challenge_id}/terminate", status_code=status.HTTP_200_OK)
+async def terminate_challenge(challenge_id: int, current_user: CurrentUserDep):
+    # k8sManager is a singleton - it does not get reinitialized here
+    k8s_manager = K8sChallengeManager()
+    k8s_manager.terminate_instance(current_user.id, challenge_id)
+    return {"message": "Instance terminated"}
+
+
+@router.api_route(
+    "/{challenge_id}/proxy/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+)
+async def proxy_to_challenge(
+    challenge_id: int,
+    path: str,
+    request: Request,
+    current_user: CurrentUserDep,  # Authentication required
+    challenge_repo: ChallengesRepositoryDep,
+):
+    """
+    Proxies all traffic from user -> backend -> k8s_pod
+    """
+    # 1. Verify user has spawned this challenge
+    # (Optional: Check DB or K8s if the pod exists to save overhead)
+
+    # 2. Get Challenge Details (to know the internal port)
+    ch = await challenge_repo.read_challenge_by_id(challenge_id)
+    if not ch:
+        raise HTTPException(404, "Challenge not found")
+
+    target_port = getattr(ch, "internal_port", 80)
+
+    # 3. Construct Internal K8s URL
+    # Format: http://<service_name>.<namespace>:<port>/<path>
+    k8s_manager = K8sChallengeManager()
+    service_name = k8s_manager.get_pod_name(current_user.id, challenge_id)
+    namespace = k8s_manager.namespace  # e.g., 'ctf-challenges'
+
+    # Example: http://chal-u1-c5.ctf-challenges.svc.cluster.local:80/admin.php
+    url = f"http://{service_name}.{namespace}.svc.cluster.local:{target_port}/{path}"
+
+    # 4. Forward the Request using HTTPX
+    # We strip the /proxy prefix from the URL, but keep query params
+    query_params = dict(request.query_params)
+
+    async with httpx.AsyncClient() as client:
+        try:
+            # We forward the body, headers, and method
+            # NOTE: We filter headers to avoid conflicts (like Host)
+            req_headers = {k: v for k, v in request.headers.items() if k.lower() not in ["host", "content-length"]}
+
+            # Simple streaming proxy
+            rp_req = client.build_request(
+                request.method, url, headers=req_headers, params=query_params, content=request.stream()
+            )
+
+            rp_resp = await client.send(rp_req, stream=True)
+
+            # 5. Return the Response
+            return Response(
+                content=rp_resp.read(),  # For large files, use StreamingResponse instead
+                status_code=rp_resp.status_code,
+                headers=rp_resp.headers,
+                background=BackgroundTask(rp_resp.aclose),
+            )
+
+        except httpx.ConnectError:
+            raise HTTPException(502, "Challenge is starting or unreachable. Try again in a few seconds.") from None
+        except Exception as e:
+            logger.error(f"Proxy error: {e}")
+            raise HTTPException(500, "Proxy error") from None
 
 
 @router.get("", response_model=list[ChallengeInResponse], status_code=status.HTTP_200_OK)

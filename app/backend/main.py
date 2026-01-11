@@ -13,6 +13,7 @@ from app.backend.config.settings import BackendBaseSettings, get_settings
 from app.backend.middleware.ctf_gate import CTFGateMiddleware
 from app.backend.middleware.origin_check import OriginCheckMiddleware
 from app.backend.utils.ctf_redis import ctf_redis_bus
+from app.backend.utils.k8s_manager import K8sChallengeManager
 from app.backend.utils.limiter import limiter
 from app.backend.utils.logging_config import setup_logging
 from app.backend.utils.redis_sse_listener import (
@@ -28,7 +29,7 @@ def _create_fastapi_backend(app_settings: BackendBaseSettings) -> fastapi.FastAP
     - Rate limiting
     - Routers
     """
-
+    K8sChallengeManager()  # noqa: we want to force k8s singleton manager initialization here
     backend_app = fastapi.FastAPI(**app_settings.backend_app_attributes)
 
     # -----------------------------------------
