@@ -1,8 +1,9 @@
 // src/components/Login.jsx
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { DEMO_MODE } from "../config/demo";
 import { api } from "../config/api";
+import { redirectIfLoggedIn } from "../utils/authRedirect";
 
 /**
  * Consistent feedback box (error / success / warn).
@@ -14,6 +15,9 @@ function Feedback({ message, type = "success" }) {
 
 export default function Login({ setLoggedInUser }) {
   const navigate = useNavigate();
+  useEffect(() => {
+    redirectIfLoggedIn(navigate);
+  }, [navigate]);
 
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);

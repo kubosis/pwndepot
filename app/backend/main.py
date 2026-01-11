@@ -59,6 +59,13 @@ def _create_fastapi_backend(app_settings: BackendBaseSettings) -> fastapi.FastAP
             "/terms-of-service",
             "/acceptable-use-policy",
             "/legal-notice",
+            "/api/v1/users/logout",
+            "/api/v1/users/logout/force",
+            "/api/v1/users/auth/refresh",
+            "/rankings",
+            "/read-more",
+            "/api/v1/ctf-events",
+            "/api/v1/ctf-status",
         },
         allowlist_prefixes=(
             "/assets",
@@ -66,6 +73,8 @@ def _create_fastapi_backend(app_settings: BackendBaseSettings) -> fastapi.FastAP
             "/robots.txt",
             "/api/v1/mfa",
             "/api/v1/ctf-status",
+            "/team/",
+            "/profile/",
         ),
     )
 
