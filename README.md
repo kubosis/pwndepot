@@ -110,6 +110,7 @@ You may choose either license.
 See the full terms in the [LICENSE](LICENSE) file.
 
 For commercial licensing inquiries, contact:
-**kubosis, Electro5218**
+**ISEP-CTF-TEAM, kubosis, Electro5218**
+
 
 
