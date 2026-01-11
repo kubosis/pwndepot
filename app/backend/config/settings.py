@@ -187,14 +187,19 @@ class BackendBaseSettings(BaseSettings):
     K8S_CHALLENGE_NAMESPACE: str = decouple.config("K8S_CHALLENGE_NAMESPACE", default="ctf-challenges")
 
     def load_k8s_config(self):
+        import os
+
         from kubernetes import config
 
         try:
-            if self.ENV == "prod":
+            # are we in k8s cluster?
+            if os.getenv("KUBERNETES_SERVICE_HOST"):
                 config.load_incluster_config()
+                print("Loaded in-cluster K8s config (running inside K8s).")
             else:
-                # Use local ~/.kube/config for dev
+                # Fallback: We are running locally
                 config.load_kube_config()
+                print("Loaded local K8s config (running outside K8s).")
         except Exception as e:
             print(f"Warning: Could not load K8s config: {e}")
 
