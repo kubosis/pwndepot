@@ -1,3 +1,4 @@
+import hmac
 from pathlib import Path
 
 from loguru import logger
@@ -7,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.backend.db.models import ChallengeTable, UserCompletedChallengeTable
 from app.backend.repository.base import BaseCRUDRepository
+from app.backend.utils.flag_store import RedisFlagStore
 
 
 class ChallengesCRUDRepository(BaseCRUDRepository):
@@ -47,6 +49,28 @@ class ChallengesCRUDRepository(BaseCRUDRepository):
             logger.exception("Failed to record completion due to IntegrityError")
             return None
 
+    async def validate_flag(self, challenge: ChallengeTable, submitted_flag: str, user_id: int | None = None) -> bool:
+        """
+        Validate the submitted flag.
+        - If user_id is provided, first check per-instance flag in Redis (spawned flag).
+        - Fallback to challenge.static_flag (if you have a static flag stored in DB).
+        """
+        # 1) check instance-specific flag in Redis
+        if user_id is not None:
+            store = RedisFlagStore()
+            expected = await store.get_flag(user_id, challenge.id)
+            if expected:
+                # constant-time compare
+                return hmac.compare_digest(expected, submitted_flag)
+
+        # 2) fallback to challenge-level flag (if applicable)
+        static_flag = challenge.flag
+        if static_flag:
+            return hmac.compare_digest(static_flag, submitted_flag)
+
+        # no known flag
+        return False
+
     def _read_expected_flag_from_disk(self, challenge: ChallengeTable) -> str | None:
         """Try to read a flag/secret from the challenge directory on disk.
         The repository searches common filenames in the challenges folder.
@@ -71,14 +95,3 @@ class ChallengesCRUDRepository(BaseCRUDRepository):
                 except Exception:
                     continue
         return None
-
-    async def validate_flag(self, challenge: ChallengeTable, submitted_flag: str) -> bool:
-        # prefer stored flag in DB
-        if getattr(challenge, "flag", None):
-            return submitted_flag.strip() == (challenge.flag or "").strip()
-
-        expected = self._read_expected_flag_from_disk(challenge)
-        if expected is None:
-            # No flag available to validate
-            return False
-        return submitted_flag.strip() == expected.strip()

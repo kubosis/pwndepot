@@ -18,10 +18,13 @@ from loguru import logger
 from starlette.background import BackgroundTask
 
 from app.backend.api.v1.deps import ChallengesRepositoryDep, CurrentUserDep, TeamsRepositoryDep
+from app.backend.config.settings import get_settings
 from app.backend.db.models import ChallengeTable
 from app.backend.schema.challenges import ChallengeInResponse, FlagSubmission
 from app.backend.schema.teams import TeamWithScoresInResponse
 from app.backend.utils.k8s_manager import K8sChallengeManager
+
+settings = get_settings()
 
 router = fastapi.APIRouter(tags=["challenges"])
 
@@ -42,21 +45,25 @@ def _construct_challenge_response(challenge: ChallengeTable) -> ChallengeInRespo
 @router.post("/{challenge_id}/spawn", status_code=status.HTTP_201_CREATED)
 async def spawn_challenge(challenge_id: int, current_user: CurrentUserDep, challenge_repo: ChallengesRepositoryDep):
     ch = await challenge_repo.read_challenge_by_id(challenge_id)
-    if not ch or ch.is_download:  # Don't spawn for download-only challenges
+    if not ch or ch.is_download:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Challenge not found or not deployable")
 
     image_name = ch.image
     target_port = ch.port
 
-    # Spawn
-    # k8sManager is a singleton - it does not get reinitialized here
     k8s_manager = K8sChallengeManager()
     connection_info = k8s_manager.spawn_instance(
-        user_id=current_user.id, challenge_id=ch.id, image=image_name, port=target_port
+        user_id=current_user.id, challenge_id=ch.id, image=image_name, port=target_port, ttl_seconds=3600
     )
 
     if not connection_info:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to spawn instance")
+
+    # schedule server-side termination as fallback
+    try:
+        k8s_manager.schedule_termination(current_user.id, ch.id, ttl_seconds=settings.CHALLENGE_K8S_POD_TTL_SECONDS)
+    except Exception as e:
+        logger.error(f"Failed to schedule termination for {connection_info}: {e}")
 
     return {"message": "Challenge spawned", "connection": connection_info}
 

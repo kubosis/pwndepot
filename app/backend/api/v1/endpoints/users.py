@@ -35,7 +35,12 @@ from app.backend.api.v1.deps import (
     UserRepositoryDep,
 )
 from app.backend.config.settings import get_settings
-from app.backend.db.models import RefreshTokenTable, RoleEnum, StatusEnum, UserTable
+from app.backend.db.models import (
+    RefreshTokenTable,
+    RoleEnum,
+    StatusEnum,
+    UserTable,
+)
 from app.backend.db.session import get_async_session
 from app.backend.schema.admin import AdminDeleteConfirm
 from app.backend.schema.users import (

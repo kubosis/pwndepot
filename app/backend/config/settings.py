@@ -185,6 +185,7 @@ class BackendBaseSettings(BaseSettings):
         return v
 
     K8S_CHALLENGE_NAMESPACE: str = decouple.config("K8S_CHALLENGE_NAMESPACE", default="ctf-challenges")
+    CHALLENGE_K8S_POD_TTL_SECONDS = int = decouple.config("CHALLENGE_K8S_POD_TTL_SECONDS", default=3600)
 
     def load_k8s_config(self):
         import os
