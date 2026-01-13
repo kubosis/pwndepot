@@ -39,6 +39,7 @@ from app.backend.schema.teams import (
     TeamInviteExchangeRequest,
     TeamInviteExchangeResponse,
     TeamJoinViaExchange,
+    TeamLeaderboardEntry,
 )
 from app.backend.security.tokens import create_team_invite_token, decode_team_invite_token
 from app.backend.utils.limiter import limiter
@@ -91,6 +92,23 @@ async def _construct_full_team_response(team, team_repo, include_invite: bool = 
         users=users,
         invite_url=invite_url,
     )
+
+
+# -------------------------------------------------------
+# GET TOP N TEAMS (LEADERBOARD)
+# -------------------------------------------------------
+@router.get("/leaderboard", response_model=list[TeamLeaderboardEntry])
+@limiter.limit("30/minute")
+async def get_team_leaderboard(
+    request: Request,
+    team_repo: TeamsRepositoryDep,
+    limit: int = 10,
+):
+    """
+    Get top N teams based on accumulated member scores.
+    """
+    normalized_limit = max(1, min(limit, 100))
+    return await team_repo.get_leaderboard(limit=normalized_limit)
 
 
 # -------------------------------------------------------

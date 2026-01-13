@@ -51,6 +51,7 @@ from app.backend.schema.users import (
     UserInCreate,
     UserInResponse,
     UserInUpdate,
+    UserLeaderboardEntry,
     UserStatusUpdate,
 )
 from app.backend.security.exceptions import (
@@ -108,6 +109,22 @@ def _construct_user_in_response(
         token_data=getattr(user, "token_data", None),
         mfa_enabled=bool(user.mfa_enabled),
     )
+
+
+@router.get("/leaderboard", response_model=list[UserLeaderboardEntry])
+@limiter.limit("30/minute")
+async def get_user_leaderboard(
+    request: Request,
+    account_repo: UserRepositoryDep,
+    limit: int = 10,
+):
+    """
+    Get top N users based on challenge scores.
+    Limit defaults to 10, max 100 to prevent heavy DB load.
+    """
+    normalized_limit = max(1, min(limit, 100))
+
+    return await account_repo.get_leaderboard(limit=normalized_limit)
 
 
 # -----------------------------

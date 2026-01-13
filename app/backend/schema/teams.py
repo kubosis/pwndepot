@@ -108,3 +108,11 @@ class TeamInviteInfo(BaseSchemaModel):
 class TeamJoinViaInvite(BaseSchemaModel):
     token: str
     password: str
+
+
+class TeamLeaderboardEntry(BaseSchemaModel):
+    rank: int
+    team_id: int
+    team_name: str
+    score: int
+    captain_username: str | None = None

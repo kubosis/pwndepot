@@ -4,14 +4,14 @@ import string
 
 import sqlalchemy
 from loguru import logger
-from sqlalchemy import delete, func, select
+from sqlalchemy import asc, delete, desc, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
-from app.backend.db.models import TeamTable, UserCompletedChallengeTable, UserInTeamTable, UserTable
+from app.backend.db.models import ChallengeTable, TeamTable, UserCompletedChallengeTable, UserInTeamTable, UserTable
 from app.backend.repository.base import BaseCRUDRepository
-from app.backend.schema.teams import TeamInCreate
+from app.backend.schema.teams import TeamInCreate, TeamLeaderboardEntry
 from app.backend.security.password import PasswordManager
 
 
@@ -245,3 +245,48 @@ class TeamsCRUDRepository(BaseCRUDRepository):
         stmt = select(TeamTable).options(selectinload(TeamTable.user_associations).selectinload(UserInTeamTable.user))
         query = await self.async_session.execute(stmt)
         return query.scalars().all()
+
+    async def get_leaderboard(self, limit: int = 10) -> list[TeamLeaderboardEntry]:
+        """
+        Retrieves top N teams ordered by:
+        1. Total Score (Highest first)
+        2. Time of last submission (Earliest first) - Tie breaker
+        """
+        stmt = (
+            select(
+                TeamTable.id,
+                TeamTable.name,
+                UserTable.username.label("captain_username"),
+                func.sum(ChallengeTable.points).label("total_score"),
+                func.max(UserCompletedChallengeTable.completed_at).label("last_submission"),
+            )
+            .select_from(TeamTable)
+            # Join Captain to get username (for display)
+            .join(UserTable, TeamTable.captain_user_id == UserTable.id)
+            # Join Members
+            .join(UserInTeamTable, TeamTable.id == UserInTeamTable.team_id)
+            # Join Solves linked to those members
+            .join(UserCompletedChallengeTable, UserInTeamTable.user_id == UserCompletedChallengeTable.user_id)
+            # Join Challenges to get points
+            .join(ChallengeTable, UserCompletedChallengeTable.challenge_id == ChallengeTable.id)
+            .group_by(TeamTable.id, TeamTable.name, UserTable.username)
+            .order_by(desc("total_score"), asc("last_submission"))
+            .limit(limit)
+        )
+
+        result = await self.async_session.execute(stmt)
+        rows = result.all()
+
+        leaderboard = []
+        for rank, row in enumerate(rows, start=1):
+            leaderboard.append(
+                TeamLeaderboardEntry(
+                    rank=rank,
+                    team_id=row.id,
+                    team_name=row.name,
+                    score=row.total_score,
+                    captain_username=row.captain_username,
+                )
+            )
+
+        return leaderboard

@@ -100,3 +100,11 @@ class PublicUserProfile(BaseSchemaModel):
 class SelfDeleteRequest(BaseModel):
     password: str = Field(min_length=12, max_length=128)
     mfa_code: str | None = None
+
+
+class UserLeaderboardEntry(BaseModel):
+    rank: int
+    username: str
+    score: int
+    team_name: str | None = None
+    last_submission: datetime | None = None
