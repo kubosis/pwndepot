@@ -51,6 +51,42 @@ const PUBLIC_ALWAYS_OK = new Set([
 
 const PUBLIC_PREFIX_OK = ["/profile/", "/team/"];
 
+const KNOWN_ROUTES = [
+  "/",
+  "/contact",
+  "/privacy-policy",
+  "/terms-of-service",
+  "/acceptable-use-policy",
+  "/legal-notice",
+  "/read-more",
+  "/rankings",
+  "/dual-license",
+
+  "/register",
+  "/login",
+  "/reset-password",
+  "/verify-email",
+  "/challenges",
+  "/join-team",
+  "/teams",
+  "/captain-panel",
+  "/account/delete",
+  "/mfa/reset",
+  "/mfa/setup",
+  "/mfa-verify",
+
+  "/profile/",
+  "/team/",
+  "/admin",
+];
+
+const isKnownRoute = (pathname) =>
+  KNOWN_ROUTES.some(p =>
+    p.endsWith("/")
+      ? pathname.startsWith(p)
+      : pathname === p || pathname.startsWith(p + "/")
+  );
+
 const isPublicPath = (pathname) =>
   PUBLIC_ALWAYS_OK.has(pathname) ||
   PUBLIC_PREFIX_OK.some((p) => pathname.startsWith(p));
@@ -399,6 +435,9 @@ function AppContent() {
 
       const pathname = location.pathname;
       const isPublic = isPublicPath(pathname);
+      const known = isKnownRoute(pathname);
+
+       if (!known) return;
 
       if (!isPublic) {
         navigate("/", { replace: true });
