@@ -13,6 +13,7 @@ from app.backend.config.settings import BackendBaseSettings, get_settings
 from app.backend.middleware.ctf_gate import CTFGateMiddleware
 from app.backend.middleware.origin_check import OriginCheckMiddleware
 from app.backend.utils.ctf_redis import ctf_redis_bus
+from app.backend.utils.k8s_manager import K8sChallengeManager
 from app.backend.utils.limiter import limiter
 from app.backend.utils.logging_config import setup_logging
 from app.backend.utils.redis_sse_listener import (
@@ -28,7 +29,7 @@ def _create_fastapi_backend(app_settings: BackendBaseSettings) -> fastapi.FastAP
     - Rate limiting
     - Routers
     """
-
+    K8sChallengeManager()  # noqa: we want to force k8s singleton manager initialization here
     backend_app = fastapi.FastAPI(**app_settings.backend_app_attributes)
 
     # -----------------------------------------
@@ -57,14 +58,30 @@ def _create_fastapi_backend(app_settings: BackendBaseSettings) -> fastapi.FastAP
             "/privacy-policy",
             "/terms-of-service",
             "/acceptable-use-policy",
+            "/dual-license",
             "/legal-notice",
+            "/api/v1/users/logout",
+            "/api/v1/users/logout/force",
+            "/api/v1/users/auth/refresh",
+            "/rankings",
+            "/read-more",
+            "/api/v1/ctf-events",
+            "/api/v1/ctf-status",
+            "/api/v1/mfa/verify",
+            "/api/v1/mfa/admin/verify",
+            "/api/v1/users/admin/login",
+            "/api/v1/users/me",
+            "/api/v1/contact",
         },
         allowlist_prefixes=(
             "/assets",
             "/favicon",
             "/robots.txt",
-            "/api/v1/mfa",
             "/api/v1/ctf-status",
+            "/team/",
+            "/profile/",
+            "/api/v1/users/profile/",
+            "/api/v1//teams/by-name/",
         ),
     )
 

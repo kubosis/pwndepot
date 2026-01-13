@@ -51,26 +51,26 @@ class BackendBaseSettings(BaseSettings):
 
     @property
     def SQLALCHEMY_DATABASE_ASYNC_URL(self) -> str:
-        # Async URL used by the application (choose based on ENV)
-        if self.ENV and self.ENV.upper() == "PROD":
-            if self.SQLALCHEMY_POSTGRE_ASYNC_URL:
-                return self.SQLALCHEMY_POSTGRE_ASYNC_URL
-            raise ValueError("Production async DB URL (SQLALCHEMY_POSTGRE_ASYNC_URL) is not configured")
-        # default to sqlite async URL for dev
+        # 1. Prioritize Postgres if configured (Works for Prod & Dev)
+        if self.SQLALCHEMY_POSTGRE_ASYNC_URL:
+            return self.SQLALCHEMY_POSTGRE_ASYNC_URL
+
+        # 2. Fallback to SQLite (Only for Dev)
         if self.SQLALCHEMY_SQLLITE_ASYNC_URL:
             return self.SQLALCHEMY_SQLLITE_ASYNC_URL
+
         raise ValueError("Async DB URL is not configured")
 
     @property
     def SQLALCHEMY_DATABASE_SYNC_URL(self) -> str:
-        # Sync URL used by Alembic migrations
-        if self.ENV and self.ENV.upper() == "PROD":
-            if self.SQLALCHEMY_POSTGRE_SYNC_URL:
-                return self.SQLALCHEMY_POSTGRE_SYNC_URL
-            raise ValueError("Production sync DB URL (SQLALCHEMY_POSTGRE_SYNC_URL) is not configured")
-        # default to sqlite sync URL for dev
+        # 1. Prioritize Postgres if configured
+        if self.SQLALCHEMY_POSTGRE_SYNC_URL:
+            return self.SQLALCHEMY_POSTGRE_SYNC_URL
+
+        # 2. Fallback to SQLite
         if self.SQLALCHEMY_SQLLITE_SYNC_URL:
             return self.SQLALCHEMY_SQLLITE_SYNC_URL
+
         raise ValueError("Sync DB URL is not configured")
 
     RATE_LIMIT_PER_MINUTE: int = decouple.config("RATE_LIMIT_PER_MINUTE", cast=int)
@@ -183,6 +183,25 @@ class BackendBaseSettings(BaseSettings):
         if len(v) < 32:
             raise ValueError("JWT_SECRET_KEY must be at least 32 characters long for security.")
         return v
+
+    K8S_CHALLENGE_NAMESPACE: str = decouple.config("K8S_CHALLENGE_NAMESPACE", default="ctf-challenges")
+
+    def load_k8s_config(self):
+        import os
+
+        from kubernetes import config
+
+        try:
+            # are we in k8s cluster?
+            if os.getenv("KUBERNETES_SERVICE_HOST"):
+                config.load_incluster_config()
+                print("Loaded in-cluster K8s config (running inside K8s).")
+            else:
+                # Fallback: We are running locally
+                config.load_kube_config()
+                print("Loaded local K8s config (running outside K8s).")
+        except Exception as e:
+            print(f"Warning: Could not load K8s config: {e}")
 
     @property
     def backend_app_attributes(self) -> dict[str, str | bool | None]:

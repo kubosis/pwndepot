@@ -3576,3 +3576,17 @@ body {
 @media (max-width: 900px) {
   .demo-banner { display: none; }
 }
+
+/* ========================================
+   Dual License preformatted text
+   ========================================= */
+/* Center the PRE content without destroying indentation */
+.license-pre {
+  text-align: left;         /* keep the actual glyph layout */
+}
+
+.license-pre > code {
+  display: table;           /* shrink-to-fit width */
+  margin: 0 auto;           /* center the shrink-to-fit block */
+  white-space: pre-wrap;
+}
