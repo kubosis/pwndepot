@@ -247,3 +247,38 @@ async def RequireAdminNonRecovery(current_admin: CurrentAdminDep):
                 "message": "Admin actions are disabled during MFA recovery session.",
             },
         )
+
+
+async def RequireAnonymous(request: Request):
+    """
+    Block login/register when user already has a valid access token cookie.
+    Treat BOTH fully-authenticated and MFA-partial sessions as 'already signed in/in progress'.
+    """
+    token = request.cookies.get("access_token")
+    if not token:
+        return
+
+    try:
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+            issuer="PwnDepot",
+            options={"verify_aud": False},
+        )
+        token_data = TokenPayload(**payload)
+
+        # Only block if it's an access token and not expired.
+        # (jwt.decode already checks exp by default)
+        if token_data.type == "access":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"code": "ALREADY_LOGGED_IN", "message": "You are already logged in."},
+            )
+
+    except jwt.ExpiredSignatureError:
+        # expired cookie -> treat as anonymous
+        return
+    except (jwt.PyJWTError, ValidationError):
+        # invalid garbage cookie -> treat as anonymous
+        return

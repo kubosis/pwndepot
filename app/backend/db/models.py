@@ -162,8 +162,11 @@ class ChallengeTable(Base):
 
     points: Mapped[int] = mapped_column(Integer, nullable=False)
 
+    image_name: Mapped[str] = mapped_column(String(128))
+    internal_port: Mapped[int] = mapped_column(Integer, default=80)
+
     # optional stored flag (if provided, used for validation)
-    flag: Mapped[str | None] = mapped_column(String(512), nullable=True, default=None)
+    flag: Mapped[str | None] = mapped_column(String(128), nullable=True, default=None)
 
     # per-challenge CTF state
     ctf_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

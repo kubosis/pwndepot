@@ -321,8 +321,8 @@ export default function Contact() {
             <div className="contact-footer">
               <div className="contact-footer-hint auth-bottom" style={{ marginTop: -4 }}>
                 Prefer email?{" "}
-                <a href="mailto:ctf@pwndepot.local">
-                  ctf@pwndepot.local
+                <a href="mailto:contact@pwndep0t.com">
+                  contact@pwndep0t.com
                 </a>
               </div>
             </div>

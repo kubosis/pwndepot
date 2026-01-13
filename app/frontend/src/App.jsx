@@ -27,6 +27,7 @@ import VerifyEmail from "./components/VerifyEmail";
 import MfaReset from "./components/MfaReset";
 import ReadMore from "./components/ReadMore";
 import AccountDelete from "./components/AccountDelete";
+import DualLicense from "./components/DualLicense";
 
 import { api } from "./config/api";
 import { DEMO_MODE } from "./config/demo";
@@ -35,6 +36,60 @@ import { getCookie, setCookie } from "./utils/cookies";
 if (import.meta.env.PROD && DEMO_MODE) {
   // console.error("Demo mode should not run in production");
 }
+
+const PUBLIC_ALWAYS_OK = new Set([
+  "/",
+  "/contact",
+  "/privacy-policy",
+  "/terms-of-service",
+  "/acceptable-use-policy",
+  "/legal-notice",
+  "/read-more",
+  "/rankings",
+  "/dual-license",
+]);
+
+const PUBLIC_PREFIX_OK = ["/profile/", "/team/"];
+
+const KNOWN_ROUTES = [
+  "/",
+  "/contact",
+  "/privacy-policy",
+  "/terms-of-service",
+  "/acceptable-use-policy",
+  "/legal-notice",
+  "/read-more",
+  "/rankings",
+  "/dual-license",
+
+  "/register",
+  "/login",
+  "/reset-password",
+  "/verify-email",
+  "/challenges",
+  "/join-team",
+  "/teams",
+  "/captain-panel",
+  "/account/delete",
+  "/mfa/reset",
+  "/mfa/setup",
+  "/mfa-verify",
+
+  "/profile/",
+  "/team/",
+  "/admin",
+];
+
+const isKnownRoute = (pathname) =>
+  KNOWN_ROUTES.some(p =>
+    p.endsWith("/")
+      ? pathname.startsWith(p)
+      : pathname === p || pathname.startsWith(p + "/")
+  );
+
+const isPublicPath = (pathname) =>
+  PUBLIC_ALWAYS_OK.has(pathname) ||
+  PUBLIC_PREFIX_OK.some((p) => pathname.startsWith(p));
 
 function FullScreenLoader({ text = "Loading…" }) {
   return (
@@ -181,26 +236,30 @@ function AppContent() {
   }, [fetchCtfStatus]);
 
 
+  const loggedInUserRef = useRef(null);
+  useEffect(() => { loggedInUserRef.current = loggedInUser; }, [loggedInUser]);
+
   useEffect(() => {
-    const handler = () => {
-      // /admin has to work always
+    const handler = async () => {
       if (window.location.pathname.startsWith("/admin")) return;
 
-      // if no one is loged in do nothing
-      if (!loggedInUser) return;
+      const user = loggedInUserRef.current;
+      if (!user) return;
+      if (user.role === "admin") return;
 
-      // we don't log out admins
-      if (loggedInUser.role === "admin") return;
-
-      logout();
-      if (window.location.pathname !== "/") {
-        navigate("/", { replace: true });
+      try {
+        await api.post("/users/logout");
+      } catch {
+        try { await api.post("/users/logout/force"); } catch { /* ignore */ }
       }
+
+      setLoggedInUser(null);
+      if (window.location.pathname !== "/") navigate("/", { replace: true });
     };
 
     window.addEventListener("auth-logout", handler);
     return () => window.removeEventListener("auth-logout", handler);
-  }, [loggedInUser, logout, navigate]);
+  }, [navigate]);
 
   useEffect(() => {
     if (DEMO_MODE) return;
@@ -261,6 +320,7 @@ function AppContent() {
       "/terms-of-service",
       "/acceptable-use-policy",
       "/legal-notice",
+      "/dual-license",
     ];
 
     // Never show banner on legal pages
@@ -365,17 +425,25 @@ function AppContent() {
   // Admin-only route
 
   // Single source of truth: auto logout + redirect when CTF is closed (users only)
+
   useEffect(() => {
     if (location.pathname.startsWith("/admin")) return;
     if (ctfActive === null) return;
 
     if (loggedInUser && loggedInUser.role !== "admin" && ctfActive === false) {
       logout();
-      if (location.pathname !== "/") {
+
+      const pathname = location.pathname;
+      const isPublic = isPublicPath(pathname);
+      const known = isKnownRoute(pathname);
+
+       if (!known) return;
+
+      if (!isPublic) {
         navigate("/", { replace: true });
       }
-    }
-  }, [ctfActive, loggedInUser, logout, navigate, location.pathname]);
+      }
+    }, [ctfActive, loggedInUser, logout, navigate, location.pathname]);
 
 
   const CtfGate = ({ children }) => {
@@ -440,6 +508,7 @@ function AppContent() {
             <Route path="/verify-email" element={<CtfGate><VerifyEmail /> </CtfGate>} />
             <Route path="/team/:teamName"element={<TeamPage /> } />
             <Route path="/profile/:username" element={<Profile loggedInUser={loggedInUser} />} />
+            <Route path="/dual-license" element={<DualLicense />} />
 
             {/* ========================= */}
             {/* Auth routes (CTF only) */}
@@ -633,6 +702,9 @@ function AppContent() {
                     </a>
                     <a href="/legal-notice" className="footer-link">
                       Legal Notice / Mentions Légales
+                    </a>
+                    <a href="/dual-license" className="footer-link">
+                      Dual License
                     </a>
                   </div>
 
