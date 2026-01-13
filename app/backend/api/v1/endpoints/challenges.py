@@ -48,8 +48,8 @@ async def spawn_challenge(challenge_id: int, current_user: CurrentUserDep, chall
     if not ch or ch.is_download:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Challenge not found or not deployable")
 
-    image_name = ch.image
-    target_port = ch.port
+    image_name = ch.image_name
+    target_port = ch.internal_port
 
     k8s_manager = K8sChallengeManager()
     connection_info = k8s_manager.spawn_instance(
