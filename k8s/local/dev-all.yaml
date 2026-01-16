@@ -1,0 +1,388 @@
+# =========================
+# Namespace
+# =========================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pwndepot
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ctf-challenges
+
+# =========================
+# Secrets / Config (DEV)
+# =========================
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pwndepot-secrets
+  namespace: pwndepot
+type: Opaque
+stringData:
+  POSTGRES_USER: myuser
+  POSTGRES_PASSWORD: mypassword
+  POSTGRES_DB: mydatabase
+
+  JWT_SECRET_KEY: supersecretkey32bitslongcharitsosuperlongicantreadit
+  JWT_ALGORITHM: HS256
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pwndepot-config
+  namespace: pwndepot
+data:
+  ENV: "dev"
+  UVICORN_SERVER_HOST: "0.0.0.0"
+  UVICORN_SERVER_PORT: "8000"
+  API_VERSION: "v1"
+  SERVER_WORKERS: "1"
+  RATE_LIMIT_PER_MINUTE: "50"
+  ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+  REFRESH_TOKEN_EXPIRE_DAYS: "30"   
+
+  # CORS for local
+  ALLOWED_ORIGINS: "http://pwndep0t.local,http://localhost,http://127.0.0.1"
+
+  # Mailhog local
+  SMTP_HOST: "mailhog"
+  SMTP_PORT: "1025"
+  SMTP_USE_TLS: "false"
+  SMTP_USERNAME: ""
+  SMTP_PASSWORD: ""
+  MAIL_FROM: "PwnDepot <test@local.dev>"
+  CONTACT_RECEIVER_EMAIL: "test@local.dev"
+
+  # Redis
+  REDIS_URL: "redis://redis:6379/0"
+
+  # Frontend domain for invite links
+  FRONTEND_DOMAIN: "http://pwndep0t.local"
+
+  # K8s challenges namespace
+  K8S_CHALLENGE_NAMESPACE: "ctf-challenges"
+  CHALLENGE_K8S_POD_TTL_SECONDS: "3600"
+  MAX_ACTIVE_INSTANCES: "50"
+  PUBLIC_TCP_HOST: "pwndep0t.local"
+
+  # Build DB URLs from secret values using env in container (we set them directly below in backend env)
+
+# =========================
+# Postgres (DEV)
+# =========================
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: pwndepot
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: pwndepot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom: { secretKeyRef: { name: pwndepot-secrets, key: POSTGRES_USER } }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: pwndepot-secrets, key: POSTGRES_PASSWORD } }
+            - name: POSTGRES_DB
+              valueFrom: { secretKeyRef: { name: pwndepot-secrets, key: POSTGRES_DB } }
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: postgres-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: pwndepot
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+
+# =========================
+# Redis
+# =========================
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: pwndepot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7
+          ports:
+            - containerPort: 6379
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: pwndepot
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+
+# =========================
+# Mailhog
+# =========================
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mailhog
+  namespace: pwndepot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mailhog
+  template:
+    metadata:
+      labels:
+        app: mailhog
+    spec:
+      containers:
+        - name: mailhog
+          image: mailhog/mailhog
+          ports:
+            - containerPort: 1025
+            - containerPort: 8025
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailhog
+  namespace: pwndepot
+spec:
+  selector:
+    app: mailhog
+  ports:
+    - name: smtp
+      port: 1025
+      targetPort: 1025
+    - name: ui
+      port: 8025
+      targetPort: 8025
+
+# =========================
+# Backend
+# =========================
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: pwndepot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      serviceAccountName: backend-sa
+      containers:
+        - name: backend
+          image: pwndepot-backend:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef: { name: pwndepot-config }
+            - secretRef: { name: pwndepot-secrets }
+          env:
+            # Postgres URLs (sync/async)
+            - name: SQLALCHEMY_POSTGRE_SYNC_URL
+              value: "postgresql+psycopg://myuser:mypassword@postgres.pwndepot.svc.cluster.local:5432/mydatabase"
+            - name: SQLALCHEMY_POSTGRE_ASYNC_URL
+              value: "postgresql+asyncpg://myuser:mypassword@postgres.pwndepot.svc.cluster.local:5432/mydatabase"
+          # IMPORTANT: backend needs permissions to create pods/services in ctf-challenges
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: pwndepot
+spec:
+  selector:
+    app: backend
+  ports:
+    - port: 8000
+      targetPort: 8000
+
+# =========================
+# Frontend
+# =========================
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: pwndepot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: pwndepot-frontend:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: pwndepot
+spec:
+  selector:
+    app: frontend
+  ports:
+    - port: 80
+      targetPort: 80
+
+# =========================
+# Alembic migrate job
+# =========================
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: alembic-upgrade
+  namespace: pwndepot
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: pwndepot-backend:local
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: pwndepot-config }
+            - secretRef: { name: pwndepot-secrets }
+          env:
+            - name: SQLALCHEMY_POSTGRE_SYNC_URL
+              value: "postgresql+psycopg://myuser:mypassword@postgres.pwndepot.svc.cluster.local:5432/mydatabase"
+            - name: SQLALCHEMY_POSTGRE_ASYNC_URL
+              value: "postgresql+asyncpg://myuser:mypassword@postgres.pwndepot.svc.cluster.local:5432/mydatabase"
+          command: ["python", "-m", "alembic", "-c", "/project/app/backend/alembic.ini", "upgrade", "head"]
+
+# =========================
+# Create admin job
+# =========================
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-admin
+  namespace: pwndepot
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: create-admin
+          image: pwndepot-backend:local
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: pwndepot-config }
+            - secretRef: { name: pwndepot-secrets }
+          env:
+            - name: SQLALCHEMY_POSTGRE_SYNC_URL
+              value: "postgresql+psycopg://myuser:mypassword@postgres.pwndepot.svc.cluster.local:5432/mydatabase"
+            - name: SQLALCHEMY_POSTGRE_ASYNC_URL
+              value: "postgresql+asyncpg://myuser:mypassword@postgres.pwndepot.svc.cluster.local:5432/mydatabase"
+          command: ["python", "-m", "app.backend.scripts.manage", "--email", "admin@example.com"]
+
+# =========================
+# Ingress (Traefik) - pwndep0t.local
+# =========================
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pwndepot-local
+  namespace: pwndepot
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: pwndep0t.local
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 8000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80

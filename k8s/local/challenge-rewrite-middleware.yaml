@@ -1,0 +1,9 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: challenge-rewrite
+  namespace: pwndepot
+spec:
+  replacePathRegex:
+    regex: ^/challenge/i/([^/]+)(/.*)?$
+    replacement: /api/v1/challenges/i/$1$2

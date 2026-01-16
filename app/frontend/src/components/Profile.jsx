@@ -62,12 +62,18 @@ export default function Profile({ loggedInUser }) {
         setNotFound(false);
 
         try {
-          const challRes = await api.get(`/challenges/user/${username}/solved`);
-          const solved = challRes.data || [];
+          const challRes = await api.get(`/users/profile/${username}/solves`);
+          const solves = Array.isArray(challRes.data) ? challRes.data : [];
 
-          const formatted = solved.map((item, index) => ({
-            name: item.category,
-            value: item.count,
+          const counts = new Map();
+          for (const s of solves) {
+            const cat = s.challenge_category || "Uncategorized";
+            counts.set(cat, (counts.get(cat) || 0) + 1);
+          }
+
+          const formatted = Array.from(counts.entries()).map(([cat, count], index) => ({
+            name: cat,
+            value: count,
             color: PIE_COLORS[index % PIE_COLORS.length],
           }));
 

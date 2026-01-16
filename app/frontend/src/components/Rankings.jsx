@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import "../index.css";
+import { api } from "../config/api"
 
 // Helper function to generate a distinct color for each team based on its index
 const getDistinctColor = (index, total) =>
@@ -23,41 +24,72 @@ export default function Rankings() {
   // ---------------------------
   // Mock data for frontend testing (kept as-is)
   // ---------------------------
-  useEffect(() => {
-    // TODO: Replace with backend API call
-    const mockTeams = [
-      {
-        name: "CryptoMasters",
-        scores: [
-          { time: "10:00", points: 0 },
-          { time: "11:00", points: 20 },
-          { time: "12:00", points: 50 },
-          { time: "13:00", points: 120 },
-          { time: "14:00", points: 180 },
-          { time: "15:00", points: 228 },
-        ],
-      },
-      {
-        name: "WebWizards",
-        scores: [
-          { time: "10:00", points: 0 },
-          { time: "11:00", points: 10 },
-          { time: "12:00", points: 30 },
-          { time: "13:00", points: 55 },
-          { time: "14:00", points: 70 },
-          { time: "15:00", points: 91 },
-        ],
-      },
-    ];
+ useEffect(() => {
+  let mounted = true;
 
-    setTeams(mockTeams);
+  function toTimeLabel(dateStr) {
+    const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return "00:00";
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return `${hh}:${mm}`;
+  }
 
-    const colors = {};
-    mockTeams.forEach((t, i) => {
-      colors[t.name] = getDistinctColor(i, mockTeams.length);
-    });
-    setTeamColors(colors);
-  }, []);
+  function buildCumulativeScores(scoreRecords) {
+    // scoreRecords from backend: [{ date_time, score, obtained_by, ... }]
+    const sorted = [...(scoreRecords || [])].sort(
+      (a, b) => new Date(a.date_time).getTime() - new Date(b.date_time).getTime()
+    );
+
+    let acc = 0;
+    const out = [{ time: "00:00", points: 0 }];
+
+    for (const r of sorted) {
+      const delta = Number(r.score || 0);
+      acc += delta;
+      out.push({ time: toTimeLabel(r.date_time), points: acc });
+    }
+
+    return out;
+  }
+
+  async function loadTeams() {
+    try {
+      // Full list with history per team (team-unique score records)
+      const res = await api.get("/teams");
+      const rows = Array.isArray(res.data) ? res.data : [];
+
+      const mapped = rows.map((t) => ({
+        id: t.team_id,
+        name: t.team_name,
+        // IMPORTANT: chart expects cumulative points
+        scores: buildCumulativeScores(t.scores),
+        // keep total if you want it later
+        total_score: Number(t.total_score || 0),
+      }));
+
+      if (!mounted) return;
+
+      setTeams(mapped);
+
+      const colors = {};
+      mapped.forEach((t, i) => {
+        colors[t.name] = getDistinctColor(i, mapped.length);
+      });
+      setTeamColors(colors);
+    } catch {
+      if (!mounted) return;
+      setTeams([]);
+      setTeamColors({});
+    }
+  }
+
+  loadTeams();
+  return () => {
+    mounted = false;
+  };
+}, []);
+
 
   const getTooltipStyle = () => {
   const canvas = canvasRef.current;
@@ -87,7 +119,7 @@ export default function Rankings() {
     return [...teams]
       .map((t) => {
         const finalScore = t.scores[t.scores.length - 1]?.points || 0;
-        const totalPoints = t.scores.reduce((sum, s) => sum + s.points, 0);
+        const totalPoints = t.scores.length ? t.scores[t.scores.length - 1].points : 0;
         const firstReachedTime =
           t.scores.find((s) => s.points === finalScore)?.time || t.scores[0]?.time || "00:00";
         return { ...t, finalScore, totalPoints, firstReachedTime };

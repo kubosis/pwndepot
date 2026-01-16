@@ -142,11 +142,18 @@ class DifficultyEnum(enum.Enum):
     HARD = "hard"
 
 
+class ChallengeProtocolEnum(enum.Enum):
+    HTTP = "http"
+    TCP = "tcp"
+
+
 class ChallengeTable(Base):
     __tablename__ = "challenges"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    category: Mapped[str] = mapped_column(String(64), nullable=False, default="Uncategorized")
+    author: Mapped[str] = mapped_column(String(64), nullable=False, default="unknown")
     path: Mapped[str] = mapped_column(String(256), nullable=False, unique=True)
     description: Mapped[str] = mapped_column(String(512))
     hint: Mapped[str] = mapped_column(String(512))
@@ -159,6 +166,13 @@ class ChallengeTable(Base):
         Enum(DifficultyEnum, name="difficulty_enum", native_enum=False),
         nullable=False,
     )
+
+    protocol: Mapped[ChallengeProtocolEnum] = mapped_column(
+        Enum(ChallengeProtocolEnum, name="challenge_protocol_enum", native_enum=False),
+        nullable=False,
+        default=ChallengeProtocolEnum.HTTP,
+    )
+    expose_tcp: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     points: Mapped[int] = mapped_column(Integer, nullable=False)
 
@@ -199,6 +213,8 @@ class UserCompletedChallengeTable(Base):
     challenge: Mapped["ChallengeTable"] = relationship(back_populates="completion_associations")
 
     __mapper_args__: ClassVar[dict] = {"eager_defaults": True}
+
+    __table_args__ = (Index("uq_user_challenge_once", "user_id", "challenge_id", unique=True),)
 
 
 class TeamTable(Base):
@@ -297,3 +313,30 @@ class CTFStateTable(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
+
+
+# --- ADD-ON: team-scoped completion table (team gets points only once per challenge) ---
+
+
+class TeamCompletedChallengeTable(Base):
+    __tablename__ = "team_completed_challenges"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"), index=True)
+    challenge_id: Mapped[int] = mapped_column(ForeignKey("challenges.id", ondelete="CASCADE"), index=True)
+
+    # Optional audit field: who was first in the team
+    completed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        # Enforce: one team can earn points for a challenge only once
+        Index("uq_team_challenge_once", "team_id", "challenge_id", unique=True),
+    )
+
+    __mapper_args__: ClassVar[dict] = {"eager_defaults": True}

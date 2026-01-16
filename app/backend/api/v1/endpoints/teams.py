@@ -57,25 +57,29 @@ INVITE_EXCHANGE_TTL_SECONDS = settings.INVITE_EXCHANGE_TTL_SECONDS
 
 
 async def _construct_full_team_response(team, team_repo, include_invite: bool = False) -> FullTeamInResponse:
-    # team: TeamTable
-    # get scores records
-    scores = await team_repo.get_team_scores(team.id)
+    # -------------------------
+    # TEAM-UNIQUE score records + total_score
+    # -------------------------
+    rows = await team_repo.get_team_score_records_unique(team.id)
 
     score_records = []
-    total = 0
-    for s in scores:
-        # s: UserCompletedChallengeTable
-        points = getattr(s.challenge, "points", 0)
+    for r in rows:
         score_records.append(
-            {"date_time": s.completed_at, "obtained_by": getattr(s.user, "username", ""), "score": points}
+            {
+                "date_time": r.completed_at,
+                "obtained_by": r.username or "team",
+                "score": int(r.points or 0),
+                "challenge_category": getattr(r, "challenge_category", None),
+            }
         )
-        total += points
 
-    users = []
-    for assoc in getattr(team, "user_associations", []):
-        u = getattr(assoc, "user", None)
-        if u:
-            users.append({"username": u.username})
+    total = await team_repo.get_team_total_score_unique(team.id)
+
+    # -------------------------
+    # Members with per-user score
+    # -------------------------
+    members = await team_repo.get_member_scores(team.id)
+    users = [{"username": uname, "score": sc} for (uname, sc) in members]
 
     invite_url = None
     if include_invite:
@@ -87,7 +91,7 @@ async def _construct_full_team_response(team, team_repo, include_invite: bool = 
         team_name=team.name,
         captain_user_id=team.captain_user_id,
         scores=score_records,
-        total_score=total,
+        total_score=int(total),
         created_at=team.created_at,
         users=users,
         invite_url=invite_url,
@@ -108,7 +112,7 @@ async def get_team_leaderboard(
     Get top N teams based on accumulated member scores.
     """
     normalized_limit = max(1, min(limit, 100))
-    return await team_repo.get_leaderboard(limit=normalized_limit)
+    return await team_repo.get_leaderboard_team_unique(limit=normalized_limit)
 
 
 # -------------------------------------------------------
@@ -494,3 +498,18 @@ async def get_my_team_invite(current_user: CurrentUserDep, team_repo: TeamsRepos
     token = create_team_invite_token(team.id, team.join_code)
     invite_url = f"{settings.FRONTEND_DOMAIN}/join-team?token={token}"
     return {"invite_url": invite_url}
+
+
+@router.get("/me/solved", status_code=status.HTTP_200_OK)
+@limiter.limit("60/minute")
+async def get_team_solved_ids(
+    request: Request,
+    current_user: CurrentUserDep,
+    team_repo: TeamsRepositoryDep,
+):
+    team = await team_repo.get_team_for_user(current_user.id)
+    if not team:
+        raise HTTPException(status_code=400, detail="You must be in a team.")
+
+    ids = await team_repo.get_team_solved_ids(team.id)
+    return {"solved_ids": ids}

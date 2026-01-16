@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.backend.api.v1.deps import (
     AsyncSessionDep,
+    ChallengesRepositoryDep,
     CurrentAdminDep,
     CurrentUserDep,
     RequireAdminNonRecovery,
@@ -52,6 +53,7 @@ from app.backend.schema.users import (
     UserInResponse,
     UserInUpdate,
     UserLeaderboardEntry,
+    UserSolveEntry,
     UserStatusUpdate,
 )
 from app.backend.security.exceptions import (
@@ -124,7 +126,7 @@ async def get_user_leaderboard(
     """
     normalized_limit = max(1, min(limit, 100))
 
-    return await account_repo.get_leaderboard(limit=normalized_limit)
+    return await account_repo.get_leaderboard_team_unique(limit=normalized_limit)
 
 
 # -----------------------------
@@ -805,6 +807,7 @@ async def get_user_profile(
     request: Request,
     account_repo: UserRepositoryDep,
     team_repo: TeamsRepositoryDep,
+    challenge_repo: ChallengesRepositoryDep,
 ):
     user = await account_repo.read_account_by_username(username)
     if not user:
@@ -812,11 +815,14 @@ async def get_user_profile(
 
     team = await team_repo.get_team_for_user(user.id)
 
+    score = await challenge_repo.get_user_total_score(user.id)
+
     return PublicUserProfile(
         id=user.id,
         username=user.username,
         team_id=team.id if team else None,
         team_name=team.name if team else None,
+        score=score,
     )
 
 
@@ -904,6 +910,15 @@ async def delete_user(
     return {"message": f"User {user_id} deleted successfully"}
 
 
+@router.get("/me/solved", status_code=200)
+async def get_my_solved_ids(
+    current_user: CurrentUserDep,
+    challenge_repo: ChallengesRepositoryDep,
+):
+    ids = await challenge_repo.get_user_solved_ids(current_user.id)
+    return {"solved_ids": ids}
+
+
 # -----------------------------
 # LOGOUT — CLEAR COOKIE
 # -----------------------------
@@ -932,3 +947,32 @@ async def logout_user(
 async def logout_force(request: Request, response: Response):
     clear_auth_cookies(response)
     return {"message": "Logged out"}
+
+
+@router.get("/profile/{username}/solves", response_model=list[UserSolveEntry])
+@limiter.limit("30/minute")
+async def get_user_solves(
+    username: str,
+    request: Request,
+    account_repo: UserRepositoryDep,
+    challenge_repo: ChallengesRepositoryDep,
+):
+    user = await account_repo.read_account_by_username(username)
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    rows = await challenge_repo.list_user_solves_with_challenge(user.id)
+
+    out: list[UserSolveEntry] = []
+    for challenge_id, completed_at, name, category, points in rows:
+        out.append(
+            UserSolveEntry(
+                challenge_id=int(challenge_id),
+                challenge_name=str(name),
+                challenge_category=str(category or "Uncategorized"),
+                points=int(points or 0),
+                completed_at=completed_at,
+            )
+        )
+
+    return out
