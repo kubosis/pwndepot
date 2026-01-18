@@ -2,14 +2,22 @@ import typing
 
 import sqlalchemy
 from loguru import logger
-from sqlalchemy import func, update
+from sqlalchemy import asc, desc, func, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import functions as sqlalchemy_functions
 
-from app.backend.db.models import StatusEnum, UserTable
+from app.backend.db.models import (
+    ChallengeTable,
+    RoleEnum,
+    StatusEnum,
+    TeamTable,
+    UserCompletedChallengeTable,
+    UserInTeamTable,
+    UserTable,
+)
 from app.backend.repository.base import BaseCRUDRepository
-from app.backend.schema.users import UserInCreate, UserInUpdate
+from app.backend.schema.users import UserInCreate, UserInUpdate, UserLeaderboardEntry
 from app.backend.security.password import PasswordManager
 from app.backend.utils.exceptions import DBEntityAlreadyExists, DBEntityDoesNotExist
 
@@ -197,3 +205,45 @@ class UserCRUDRepository(BaseCRUDRepository):
         db_email = email_query.scalar()
 
         return db_email is not None
+
+    async def get_leaderboard(self, limit: int = 10) -> list[UserLeaderboardEntry]:
+        """
+        Retrieves top N users ordered by:
+        1. Total Score (Highest first)
+        2. Time of last submission (Earliest first) - Tie breaker
+        """
+        stmt = (
+            sqlalchemy.select(
+                UserTable.username,
+                func.sum(ChallengeTable.points).label("total_score"),
+                func.max(UserCompletedChallengeTable.completed_at).label("last_submission"),
+                TeamTable.name.label("team_name"),
+            )
+            .join(UserCompletedChallengeTable, UserTable.id == UserCompletedChallengeTable.user_id)
+            .join(ChallengeTable, UserCompletedChallengeTable.challenge_id == ChallengeTable.id)
+            # Outer join to teams in case user has no team
+            .outerjoin(UserInTeamTable, UserTable.id == UserInTeamTable.user_id)
+            .outerjoin(TeamTable, UserInTeamTable.team_id == TeamTable.id)
+            .where(UserTable.status == StatusEnum.ACTIVE)
+            .where(UserTable.role == RoleEnum.USER)
+            .group_by(UserTable.id, UserTable.username, TeamTable.name)
+            .order_by(desc("total_score"), asc("last_submission"))
+            .limit(limit)
+        )
+
+        result = await self.async_session.execute(stmt)
+        rows = result.all()
+
+        leaderboard = []
+        for rank, row in enumerate(rows, start=1):
+            leaderboard.append(
+                UserLeaderboardEntry(
+                    rank=rank,
+                    username=row.username,
+                    score=row.total_score,
+                    last_submission=row.last_submission,
+                    team_name=row.team_name,
+                )
+            )
+
+        return leaderboard

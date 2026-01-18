@@ -19,4 +19,9 @@ app/frontend/src/components/ReadMore.jsx:jwt:15
 app/frontend/src/components/VerifyEmail.jsx:jwt:88
 app/frontend/src/components/TeamPage.jsx:jwt:598
 app/frontend/src/components/ResetPassword.jsx:jwt:202
-
+app/frontend/src/App.jsx:jwt:46
+app/frontend/src/App.jsx:jwt:63
+app/frontend/src/components/Teams.jsx:jwt:230
+app/frontend/src/components/Login.jsx:jwt:225
+app/frontend/src/App.jsx:jwt:101
+app/frontend/src/components/Register.jsx:jwt:162

@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backend-sa
+  namespace: pwndepot
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: challenge-spawner
+  namespace: ctf-challenges
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services"]
+  verbs: ["get", "list", "watch", "create", "delete", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: challenge-spawner-binding
+  namespace: ctf-challenges
+subjects:
+- kind: ServiceAccount
+  name: backend-sa
+  namespace: pwndepot
+roleRef:
+  kind: Role
+  name: challenge-spawner
+  apiGroup: rbac.authorization.k8s.io

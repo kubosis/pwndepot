@@ -46,6 +46,7 @@ class TeamJoinViaExchange(BaseSchemaModel):
 # -----------------------------
 class UserInTeam(BaseSchemaModel):
     username: str
+    score: int = 0
 
 
 # -----------------------------
@@ -55,6 +56,7 @@ class ScoreRecord(BaseSchemaModel):
     date_time: datetime
     obtained_by: str
     score: int
+    challenge_category: str | None = None
 
 
 # -----------------------------
@@ -108,3 +110,11 @@ class TeamInviteInfo(BaseSchemaModel):
 class TeamJoinViaInvite(BaseSchemaModel):
     token: str
     password: str
+
+
+class TeamLeaderboardEntry(BaseSchemaModel):
+    rank: int
+    team_id: int
+    team_name: str
+    score: int
+    captain_username: str | None = None

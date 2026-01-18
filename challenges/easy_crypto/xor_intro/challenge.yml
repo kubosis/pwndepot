@@ -1,0 +1,16 @@
+name: "XOR Intro"
+category: crypto
+difficulty: easy
+author: Rn7595
+
+description: |
+  We intercepted a short message protected with a homemade XOR-based scheme.
+  All we have is a hex-encoded ciphertext.
+  Recover the original plaintext and extract the flag.
+
+files:
+  - files/ciphertext.txt
+
+flags:
+  - type: static
+    content: "FLAG{xor_intro_placeholder}"

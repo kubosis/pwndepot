@@ -46,18 +46,12 @@ class BackendBaseSettings(BaseSettings):
     # Database connection URLs (the .env in this project defines separate vars for PROD/DEV)
     SQLALCHEMY_POSTGRE_ASYNC_URL: str | None = decouple.config("SQLALCHEMY_POSTGRE_ASYNC_URL", default=None)
     SQLALCHEMY_POSTGRE_SYNC_URL: str | None = decouple.config("SQLALCHEMY_POSTGRE_SYNC_URL", default=None)
-    SQLALCHEMY_SQLLITE_ASYNC_URL: str | None = decouple.config("SQLALCHEMY_SQLLITE_ASYNC_URL", default=None)
-    SQLALCHEMY_SQLLITE_SYNC_URL: str | None = decouple.config("SQLALCHEMY_SQLLITE_SYNC_URL", default=None)
 
     @property
     def SQLALCHEMY_DATABASE_ASYNC_URL(self) -> str:
         # 1. Prioritize Postgres if configured (Works for Prod & Dev)
         if self.SQLALCHEMY_POSTGRE_ASYNC_URL:
             return self.SQLALCHEMY_POSTGRE_ASYNC_URL
-
-        # 2. Fallback to SQLite (Only for Dev)
-        if self.SQLALCHEMY_SQLLITE_ASYNC_URL:
-            return self.SQLALCHEMY_SQLLITE_ASYNC_URL
 
         raise ValueError("Async DB URL is not configured")
 
@@ -66,10 +60,6 @@ class BackendBaseSettings(BaseSettings):
         # 1. Prioritize Postgres if configured
         if self.SQLALCHEMY_POSTGRE_SYNC_URL:
             return self.SQLALCHEMY_POSTGRE_SYNC_URL
-
-        # 2. Fallback to SQLite
-        if self.SQLALCHEMY_SQLLITE_SYNC_URL:
-            return self.SQLALCHEMY_SQLLITE_SYNC_URL
 
         raise ValueError("Sync DB URL is not configured")
 
@@ -175,6 +165,11 @@ class BackendBaseSettings(BaseSettings):
     def COOKIE_HTTPONLY(self) -> bool:
         return True  # always true - protects against XSS
 
+    # =============================
+    # TCP CHALLENGES (NODEPORT)
+    # =============================
+    PUBLIC_TCP_HOST: str = decouple.config("PUBLIC_TCP_HOST", default="pwndep0t.com")
+
     # -----------------------------
     # SECURITY VALIDATION
     # -----------------------------
@@ -185,6 +180,8 @@ class BackendBaseSettings(BaseSettings):
         return v
 
     K8S_CHALLENGE_NAMESPACE: str = decouple.config("K8S_CHALLENGE_NAMESPACE", default="ctf-challenges")
+    CHALLENGE_K8S_POD_TTL_SECONDS: int = decouple.config("CHALLENGE_K8S_POD_TTL_SECONDS", cast=int, default=3600)
+    MAX_ACTIVE_INSTANCES: int = decouple.config("MAX_ACTIVE_INSTANCES", cast=int, default=50)
 
     def load_k8s_config(self):
         import os

@@ -12,6 +12,8 @@ class ChallengeInResponse(BaseSchemaModel):
     difficulty: str
     points: int
     created_at: datetime
+    category: str | None = None
+    author: str | None = None
 
 
 class FlagSubmission(BaseSchemaModel):

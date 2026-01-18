@@ -95,8 +95,25 @@ class PublicUserProfile(BaseSchemaModel):
     username: str
     team_name: str | None = None
     team_id: int | None = None
+    score: int = 0
+
+
+class UserSolveEntry(BaseSchemaModel):
+    challenge_id: int
+    challenge_name: str
+    challenge_category: str
+    points: int
+    completed_at: datetime
 
 
 class SelfDeleteRequest(BaseModel):
     password: str = Field(min_length=12, max_length=128)
     mfa_code: str | None = None
+
+
+class UserLeaderboardEntry(BaseModel):
+    rank: int
+    username: str
+    score: int
+    team_name: str | None = None
+    last_submission: datetime | None = None

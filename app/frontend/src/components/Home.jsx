@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { api } from "../config/api";
 
 export default function Home({ ctfActive, ctfSecondsLeft }) {
   const [secondsLeft, setSecondsLeft] = useState(
     typeof ctfSecondsLeft === "number" ? ctfSecondsLeft : null
   );
+  const [bestTeam, setBestTeam] = useState("TBD");
 
   useEffect(() => {
     if (typeof ctfSecondsLeft === "number") setSecondsLeft(ctfSecondsLeft);
@@ -28,6 +30,49 @@ export default function Home({ ctfActive, ctfSecondsLeft }) {
       window.dispatchEvent(new Event("ctf-refresh"));
     }
   }, [ctfActive, secondsLeft]);
+
+    useEffect(() => {
+      let alive = true;
+
+      async function loadBestTeam() {
+        try {
+          const res = await api.get("/challenges/rankings");
+
+          const arr = Array.isArray(res.data) ? res.data : [];
+          if (!arr.length) {
+            if (alive) setBestTeam("TBD");
+            return;
+          }
+
+          const top = [...arr].sort((a, b) => (b.total_score || 0) - (a.total_score || 0))[0];
+
+          const name = top?.team_name || top?.name || "TBD";
+
+          if (alive) setBestTeam(name !== "TBD" ? `${name}` : "TBD");
+        } catch {
+          if (alive) setBestTeam("TBD");
+        }
+      }
+
+      loadBestTeam();
+
+      // refresh once in 15 minutes after ctf starts
+      let id = null;
+      if (ctfActive) {
+        id = setInterval(loadBestTeam, 15000);
+      }
+
+      
+      const onRefresh = () => loadBestTeam();
+      window.addEventListener("ctf-refresh", onRefresh);
+
+      return () => {
+        alive = false;
+        if (id) clearInterval(id);
+        window.removeEventListener("ctf-refresh", onRefresh);
+      };
+    }, [ctfActive]);
+
 
   function formatTime(seconds) {
     const days = Math.floor(seconds / 86400);
@@ -234,9 +279,9 @@ export default function Home({ ctfActive, ctfSecondsLeft }) {
 
               <div className="sm:text-right">
                 <div className="text-[11px] uppercase tracking-widest text-emerald-200/70">
-                  Best player
+                  Best team
                 </div>
-                <div className="mt-1 text-xl font-extrabold tracking-tight">TBD</div>
+                <div className="mt-1 text-xl font-extrabold tracking-tight">{bestTeam}</div>
               </div>
             </div>
           </div>

@@ -12,10 +12,7 @@ function LegalNotice() {
       </p>
 
       <h2>Publisher</h2>
-      <p>ISEP Students - Software Security Course Project</p>
-
-      <h2>Institution</h2>
-      <p>ISEP, 10 rue de Vanves, 92130 Issy-les-Moulineaux, France</p>
+      <p>Students of Software Security Course Project</p>
 
       <h2>Publication Directors</h2>
       <p>Paweł Jamroziak, Jakub Sukdol, Balázs Vincze, Tóth Bertalan, Shane Samuel PRADEEP and Navin Rajendran</p>

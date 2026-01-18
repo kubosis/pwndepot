@@ -4,14 +4,22 @@ import string
 
 import sqlalchemy
 from loguru import logger
-from sqlalchemy import delete, func, select
+from sqlalchemy import asc, delete, desc, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.sql import nulls_last
 
-from app.backend.db.models import TeamTable, UserCompletedChallengeTable, UserInTeamTable, UserTable
+from app.backend.db.models import (
+    ChallengeTable,
+    TeamCompletedChallengeTable,
+    TeamTable,
+    UserCompletedChallengeTable,
+    UserInTeamTable,
+    UserTable,
+)
 from app.backend.repository.base import BaseCRUDRepository
-from app.backend.schema.teams import TeamInCreate
+from app.backend.schema.teams import TeamInCreate, TeamLeaderboardEntry
 from app.backend.security.password import PasswordManager
 
 
@@ -245,3 +253,183 @@ class TeamsCRUDRepository(BaseCRUDRepository):
         stmt = select(TeamTable).options(selectinload(TeamTable.user_associations).selectinload(UserInTeamTable.user))
         query = await self.async_session.execute(stmt)
         return query.scalars().all()
+
+    async def get_leaderboard(self, limit: int = 10) -> list[TeamLeaderboardEntry]:
+        """
+        Retrieves top N teams ordered by:
+        1. Total Score (Highest first)
+        2. Time of last submission (Earliest first) - Tie breaker
+        """
+
+        stmt = (
+            select(
+                TeamTable.id,
+                TeamTable.name,
+                UserTable.username.label("captain_username"),
+                func.sum(ChallengeTable.points).label("total_score"),
+                func.max(UserCompletedChallengeTable.completed_at).label("last_submission"),
+            )
+            .select_from(TeamTable)
+            # Join Captain to get username (for display)
+            .join(UserTable, TeamTable.captain_user_id == UserTable.id)
+            # Join Members
+            .join(UserInTeamTable, TeamTable.id == UserInTeamTable.team_id)
+            # Join Solves linked to those members
+            .join(UserCompletedChallengeTable, UserInTeamTable.user_id == UserCompletedChallengeTable.user_id)
+            # Join Challenges to get points
+            .join(ChallengeTable, UserCompletedChallengeTable.challenge_id == ChallengeTable.id)
+            .group_by(TeamTable.id, TeamTable.name, UserTable.username)
+            .order_by(desc("total_score"), asc("last_submission"))
+            .limit(limit)
+        )
+
+        result = await self.async_session.execute(stmt)
+        rows = result.all()
+
+        leaderboard = []
+        for rank, row in enumerate(rows, start=1):
+            leaderboard.append(
+                TeamLeaderboardEntry(
+                    rank=rank,
+                    team_id=row.id,
+                    team_name=row.name,
+                    score=row.total_score,
+                    captain_username=row.captain_username,
+                )
+            )
+
+        return leaderboard
+
+    async def get_leaderboard_team_unique(self, limit: int = 10) -> list[TeamLeaderboardEntry]:
+        """
+        Team ranking where each challenge counts only once per team.
+        Sorting:
+        - total_score DESC
+        - last_submission ASC (earlier wins tie), NULLs last
+        """
+        normalized_limit = max(1, min(limit, 100))
+
+        stmt = (
+            select(
+                TeamTable.id.label("team_id"),
+                TeamTable.name.label("team_name"),
+                UserTable.username.label("captain_username"),
+                func.coalesce(func.sum(ChallengeTable.points), 0).label("total_score"),
+                func.max(TeamCompletedChallengeTable.completed_at).label("last_submission"),
+            )
+            .select_from(TeamTable)
+            .join(UserTable, TeamTable.captain_user_id == UserTable.id)
+            .outerjoin(TeamCompletedChallengeTable, TeamCompletedChallengeTable.team_id == TeamTable.id)
+            .outerjoin(ChallengeTable, TeamCompletedChallengeTable.challenge_id == ChallengeTable.id)
+            .group_by(TeamTable.id, TeamTable.name, UserTable.username)
+            .order_by(
+                desc("total_score"),
+                nulls_last(asc("last_submission")),
+            )
+            .limit(normalized_limit)
+        )
+
+        result = await self.async_session.execute(stmt)
+        rows = result.all()
+
+        leaderboard: list[TeamLeaderboardEntry] = []
+        for rank, row in enumerate(rows, start=1):
+            leaderboard.append(
+                TeamLeaderboardEntry(
+                    rank=rank,
+                    team_id=row.team_id,
+                    team_name=row.team_name,
+                    score=int(row.total_score or 0),
+                    captain_username=row.captain_username,
+                )
+            )
+
+        return leaderboard
+
+    async def record_team_completion(
+        self, team_id: int, challenge_id: int, completed_by_user_id: int | None = None
+    ) -> bool:
+        """
+        Insert team completion once.
+        Returns:
+          True  -> team awarded now
+          False -> team already had credit (unique constraint hit)
+        """
+        try:
+            row = TeamCompletedChallengeTable(
+                team_id=team_id,
+                challenge_id=challenge_id,
+                completed_by_user_id=completed_by_user_id,
+            )
+            self.async_session.add(row)
+            await self.async_session.commit()
+            return True
+        except IntegrityError:
+            await self.async_session.rollback()
+            return False
+
+    async def get_team_solved_ids(self, team_id: int) -> list[int]:
+        """
+        Returns list of challenge_ids solved by the team (team-scoped completions).
+        """
+        stmt = select(TeamCompletedChallengeTable.challenge_id).where(TeamCompletedChallengeTable.team_id == team_id)
+        res = await self.async_session.execute(stmt)
+        return [int(x) for x in res.scalars().all()]
+
+    async def get_team_total_score_unique(self, team_id: int) -> int:
+        stmt = (
+            select(func.coalesce(func.sum(ChallengeTable.points), 0))
+            .select_from(TeamCompletedChallengeTable)
+            .join(ChallengeTable, TeamCompletedChallengeTable.challenge_id == ChallengeTable.id)
+            .where(TeamCompletedChallengeTable.team_id == team_id)
+        )
+        res = await self.async_session.execute(stmt)
+        return int(res.scalar_one() or 0)
+
+    async def get_team_score_records_unique(self, team_id: int):
+        """
+        Returns rows for team completions (unique per challenge),
+        with metadata for ScoreRecord.
+        """
+        stmt = (
+            select(
+                TeamCompletedChallengeTable.completed_at.label("completed_at"),
+                ChallengeTable.points.label("points"),
+                ChallengeTable.id.label("challenge_id"),
+                ChallengeTable.name.label("challenge_name"),
+                ChallengeTable.category.label("challenge_category"),
+                ChallengeTable.category.label("challenge_category"),
+                ChallengeTable.author.label("challenge_author"),
+                # optional "who solved first" (can be NULL)
+                UserTable.username.label("username"),
+            )
+            .select_from(TeamCompletedChallengeTable)
+            .join(ChallengeTable, TeamCompletedChallengeTable.challenge_id == ChallengeTable.id)
+            .outerjoin(UserTable, TeamCompletedChallengeTable.completed_by_user_id == UserTable.id)
+            .where(TeamCompletedChallengeTable.team_id == team_id)
+            .order_by(TeamCompletedChallengeTable.completed_at.asc())
+        )
+        res = await self.async_session.execute(stmt)
+        return res.all()
+
+    async def get_member_scores(self, team_id: int) -> list[tuple[str, int]]:
+        """
+        Per-user score for members of a team (user-scoped, not team-unique).
+        Used by TeamPage members table: u.score.
+        """
+        stmt = (
+            select(
+                UserTable.username.label("username"),
+                func.coalesce(func.sum(ChallengeTable.points), 0).label("score"),
+            )
+            .select_from(UserInTeamTable)
+            .join(UserTable, UserInTeamTable.user_id == UserTable.id)
+            .outerjoin(UserCompletedChallengeTable, UserCompletedChallengeTable.user_id == UserTable.id)
+            .outerjoin(ChallengeTable, UserCompletedChallengeTable.challenge_id == ChallengeTable.id)
+            .where(UserInTeamTable.team_id == team_id)
+            .group_by(UserTable.username)
+            .order_by(desc("score"), asc(UserTable.username))
+        )
+
+        res = await self.async_session.execute(stmt)
+        return [(r.username, int(r.score or 0)) for r in res.all()]
