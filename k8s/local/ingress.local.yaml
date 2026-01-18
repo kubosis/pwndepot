@@ -1,14 +1,14 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: main-ingress
+  name: main-ingress-local
   namespace: default
   annotations:
-    kubernetes.io/ingress.class: nginx
+    traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
+  ingressClassName: traefik
   rules:
-   # with o, not 0, we need to put `127.0.0.1 pwndepot.com` to C:\Windows\System32\drivers\etc\hosts
-  - host: pwndepot.com
+  - host: pwndep0t.local
     http:
       paths:
       - path: /api

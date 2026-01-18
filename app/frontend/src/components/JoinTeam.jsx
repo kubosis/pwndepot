@@ -1,5 +1,5 @@
 // src/pages/JoinTeam.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { api } from "../config/api";
 
@@ -18,7 +18,8 @@ export default function JoinTeam() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const token = searchParams.get("token");
+  const tokenRef = useRef(searchParams.get("token"));
+  const token = tokenRef.current;
 
   const [teamName, setTeamName] = useState("");
   const [previewLoading, setPreviewLoading] = useState(true);
@@ -97,7 +98,7 @@ export default function JoinTeam() {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // -------------------------
   // Join action

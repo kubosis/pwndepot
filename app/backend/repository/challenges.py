@@ -2,13 +2,13 @@ import hmac
 from pathlib import Path
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.backend.db.models import ChallengeTable, UserCompletedChallengeTable
 from app.backend.repository.base import BaseCRUDRepository
-from app.backend.utils.flag_store import RedisFlagStore
+from app.backend.utils.flag_store import RedisFlagStore, TeamFlagStore
 
 
 class ChallengesCRUDRepository(BaseCRUDRepository):
@@ -95,3 +95,53 @@ class ChallengesCRUDRepository(BaseCRUDRepository):
                 except Exception:
                     continue
         return None
+
+    async def validate_flag_team(self, challenge: ChallengeTable, submitted_flag: str, team_id: int) -> bool:
+        """
+        Validate a submitted flag for a team-scoped instance.
+        - First check per-team Redis flag.
+        - Fallback to static flag stored in DB (if any).
+        """
+        store = TeamFlagStore()
+        expected = await store.get_flag(team_id, challenge.id)
+        if expected:
+            return hmac.compare_digest(expected, submitted_flag)
+
+        static_flag = challenge.flag
+        if static_flag:
+            return hmac.compare_digest(static_flag, submitted_flag)
+
+        return False
+
+    async def get_user_solved_ids(self, user_id: int) -> list[int]:
+        stmt = select(UserCompletedChallengeTable.challenge_id).where(UserCompletedChallengeTable.user_id == user_id)
+        res = await self.async_session.execute(stmt)
+        return [int(x) for x in res.scalars().all()]
+
+    async def get_user_total_score(self, user_id: int) -> int:
+        stmt = (
+            select(func.coalesce(func.sum(ChallengeTable.points), 0))
+            .select_from(UserCompletedChallengeTable)
+            .join(ChallengeTable, UserCompletedChallengeTable.challenge_id == ChallengeTable.id)
+            .where(UserCompletedChallengeTable.user_id == user_id)
+        )
+        res = await self.async_session.execute(stmt)
+        return int(res.scalar_one() or 0)
+
+    async def list_user_solves_with_challenge(self, user_id: int):
+        stmt = (
+            select(
+                UserCompletedChallengeTable.challenge_id,
+                UserCompletedChallengeTable.completed_at,
+                ChallengeTable.name,
+                ChallengeTable.category,
+                ChallengeTable.points,
+            )
+            .select_from(UserCompletedChallengeTable)
+            .join(ChallengeTable, ChallengeTable.id == UserCompletedChallengeTable.challenge_id)
+            .where(UserCompletedChallengeTable.user_id == user_id)
+            .order_by(UserCompletedChallengeTable.completed_at.asc())
+        )
+
+        res = await self.async_session.execute(stmt)
+        return res.all()

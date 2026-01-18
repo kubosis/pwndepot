@@ -13,6 +13,7 @@ spec:
       labels:
         app: backend
     spec:
+      serviceAccountName: backend-sa
       containers:
       - name: backend
         image: ghcr.io/kubosis/pwndepot/backend:02af576
