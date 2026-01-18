@@ -61,7 +61,7 @@ spec:
         - name: SMTP_USE_TLS
           value: "true"
         - name: SMTP_USERNAME
-          value: "contact@pwndep0t.com"
+          value: "mailer@pwndep0t.com"
         - name: MAIL_FROM
           value: "PwnDepot <contact@pwndep0t.com>"
         - name: CONTACT_RECEIVER_EMAIL # TODO
