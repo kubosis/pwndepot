@@ -76,6 +76,14 @@ spec:
         - name: FRONTEND_DOMAIN
           value: "https://pwndep0t.com"
 
+        - name: K8S_CHALLENGE_NAMESPACE
+          value: ctf-challenges
+        - name: CHALLENGE_K8S_POD_TTL_SECONDS
+          value: "3600"
+        - name: MAX_ACTIVE_INSTANCES
+          value: "50"
+        - name: PUBLIC_TCP_HOST
+          value: pwndep0t.com
         resources:
           limits:
             memory: "512Mi"
