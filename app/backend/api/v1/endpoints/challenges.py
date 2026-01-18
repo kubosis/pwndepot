@@ -24,6 +24,7 @@ from app.backend.utils.flag_store import TeamFlagStore
 from app.backend.utils.instance_limiter import InstanceLimiter
 from app.backend.utils.instance_token_store import InstanceTokenStore
 from app.backend.utils.k8s_manager import K8sChallengeManager, K8sTeamChallengeManager
+from app.backend.utils.limiter import limiter
 from app.backend.utils.team_instance_store import TeamInstanceStore
 
 settings = get_settings()
@@ -57,7 +58,11 @@ def parse_iso_utc(s: str) -> datetime:
 
 ## we decided to go with team-scoped instances only
 @router.post("/{challenge_id}/spawn", status_code=status.HTTP_201_CREATED)
-async def spawn_challenge(challenge_id: int, current_user: CurrentUserDep, challenge_repo: ChallengesRepositoryDep):
+@limiter.limit("2/minute")
+@limiter.limit("10/hour")
+async def spawn_challenge(
+    request: Request, challenge_id: int, current_user: CurrentUserDep, challenge_repo: ChallengesRepositoryDep
+):
     ch = await challenge_repo.read_challenge_by_id(challenge_id)
     if not ch or ch.is_download:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Challenge not found or not deployable")
@@ -83,7 +88,8 @@ async def spawn_challenge(challenge_id: int, current_user: CurrentUserDep, chall
 
 
 @router.post("/{challenge_id}/terminate", status_code=status.HTTP_200_OK)
-async def terminate_challenge(challenge_id: int, current_user: CurrentUserDep):
+@limiter.limit("10/minute")
+async def terminate_challenge(request: Request, challenge_id: int, current_user: CurrentUserDep):
     # k8sManager is a singleton - it does not get reinitialized here
     k8s_manager = K8sChallengeManager()
     k8s_manager.terminate_instance(current_user.id, challenge_id)
@@ -94,10 +100,11 @@ async def terminate_challenge(challenge_id: int, current_user: CurrentUserDep):
 @router.api_route(
     "/{challenge_id}/proxy/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
 )
+@limiter.limit("300/minute")
 async def proxy_to_challenge(
+    request: Request,
     challenge_id: int,
     path: str,
-    request: Request,
     current_user: CurrentUserDep,  # Authentication required
     challenge_repo: ChallengesRepositoryDep,
 ):
@@ -199,10 +206,11 @@ async def issue_web_token(
     "/i/{token}/{path:path}",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
 )
+@limiter.limit("300/minute")
 async def proxy_by_token(
+    request: Request,
     token: str,
     path: str,
-    request: Request,
     challenge_repo: ChallengesRepositoryDep,
 ):
     token_store = InstanceTokenStore()
@@ -299,7 +307,10 @@ async def get_challenge_by_id(challenge_id: int, challenge_repo: ChallengesRepos
 
 
 @router.post("/{challenge_id}/submit", response_model=dict, status_code=status.HTTP_200_OK)
+@limiter.limit("10/minute")
+@limiter.limit("50/hour")
 async def submit_flag(
+    request: Request,
     challenge_id: int,
     submission: FlagSubmission,
     current_user: CurrentUserDep,
@@ -411,7 +422,10 @@ async def get_instance_status(
 
 
 @router.post("/{challenge_id}/spawn2", status_code=status.HTTP_201_CREATED)
+@limiter.limit("2/minute")
+@limiter.limit("10/hour")
 async def spawn_challenge_team_scoped(
+    request: Request,
     challenge_id: int,
     current_user: CurrentUserDep,
     challenge_repo: ChallengesRepositoryDep,
@@ -539,7 +553,9 @@ async def spawn_challenge_team_scoped(
 
 
 @router.post("/{challenge_id}/extend", status_code=status.HTTP_200_OK)
+@limiter.limit("10/minute")
 async def extend_instance_team_scoped(
+    request: Request,
     challenge_id: int,
     current_user: CurrentUserDep,
     team_repo: TeamsRepositoryDep,
@@ -664,7 +680,9 @@ async def extend_instance_team_scoped(
 
 
 @router.post("/{challenge_id}/terminate2", status_code=status.HTTP_200_OK)
+@limiter.limit("10/minute")
 async def terminate_instance_team_scoped(
+    request: Request,
     challenge_id: int,
     current_user: CurrentUserDep,
     team_repo: TeamsRepositoryDep,
@@ -696,7 +714,10 @@ async def terminate_instance_team_scoped(
 
 
 @router.post("/{challenge_id}/submit2", response_model=dict, status_code=status.HTTP_200_OK)
+@limiter.limit("10/minute")
+@limiter.limit("50/hour")
 async def submit_flag_team_once(
+    request: Request,
     challenge_id: int,
     submission: FlagSubmission,
     current_user: CurrentUserDep,

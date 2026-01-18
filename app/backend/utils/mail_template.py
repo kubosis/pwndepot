@@ -116,7 +116,7 @@ def verification_email_html(verify_url: str, logo_cid: str) -> str:
       </table>
 
       <p style="margin-top:16px;font-size:10px;color:#4caf85;">
-        © 2025 PwnDepot :: Secure Node
+        © 2026 PwnDepot :: Secure Node
       </p>
 
     </td>
@@ -290,7 +290,7 @@ Time: {time}
 </table>
 
 <p style="margin-top:16px;font-size:10px;color:#ca8a04;">
-© 2025 PwnDepot :: Security Event
+© 2026 PwnDepot :: Security Event
 </p>
 
 </td></tr></table>
@@ -359,7 +359,7 @@ If this wasn't you, secure your account immediately.
 </table>
 
 <p style="margin-top:16px;font-size:10px;color:#f87171;">
-© 2025 PwnDepot :: Security Event
+© 2026 PwnDepot :: Security Event
 </p>
 
 </td></tr></table>
@@ -454,7 +454,7 @@ Time: {time}
 </table>
 
 <p style="margin-top:16px;font-size:10px;color:#38bdf8;">
-© 2025 PwnDepot :: Security Notification
+© 2026 PwnDepot :: Security Notification
 </p>
 
 </td></tr></table>

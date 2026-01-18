@@ -124,7 +124,7 @@ export default function AdminPage({ loggedInUser, setLoggedInUser, onLogout, ctf
     if (DEMO_MODE) {
       setCtfRunning(true);
       setTimeLeft(initialTime);
-      window.dispatchEvent(new Event("ctf-refresh"));
+      window.dispatchEvent(new CustomEvent("ctf-refresh", { detail: { force: true } }));
       return;
     }
 
@@ -134,7 +134,7 @@ export default function AdminPage({ loggedInUser, setLoggedInUser, onLogout, ctf
       setCtfEnded(false);
 
       // global refresh in App.jsx:
-      window.dispatchEvent(new Event("ctf-refresh"));
+      window.dispatchEvent(new CustomEvent("ctf-refresh", { detail: { force: true } }));
     } catch {
       setErrorMessage("Failed to start CTF");
     }
@@ -145,7 +145,7 @@ export default function AdminPage({ loggedInUser, setLoggedInUser, onLogout, ctf
     if (DEMO_MODE) {
       setCtfRunning(false);
       setTimeLeft(initialTime);
-      window.dispatchEvent(new Event("ctf-refresh"));
+      window.dispatchEvent(new CustomEvent("ctf-refresh", { detail: { force: true } }));
       return;
     }
 
@@ -153,7 +153,7 @@ export default function AdminPage({ loggedInUser, setLoggedInUser, onLogout, ctf
       await api.post("/ctf-stop");
       // UI local reset
       setCtfRunning(false);
-      window.dispatchEvent(new Event("ctf-refresh"));
+      window.dispatchEvent(new CustomEvent("ctf-refresh", { detail: { force: true } }));
     } catch {
       setErrorMessage("Failed to stop CTF");
     }
@@ -232,7 +232,7 @@ export default function AdminPage({ loggedInUser, setLoggedInUser, onLogout, ctf
     const t = setTimeout(() => {
       setBlast(false);
       setTimeLeft(initialTime); // UI reset
-      window.dispatchEvent(new Event("ctf-refresh"));
+      window.dispatchEvent(new CustomEvent("ctf-refresh", { detail: { force: true } }));
     }, 900);
 
     return () => clearTimeout(t);
@@ -295,7 +295,7 @@ export default function AdminPage({ loggedInUser, setLoggedInUser, onLogout, ctf
 
       // NO MFA - normal login
       setMfaSuccess("Admin successfully logged in");
-      window.dispatchEvent(new Event("ctf-refresh"));
+      window.dispatchEvent(new CustomEvent("ctf-refresh", { detail: { force: true } }));
       await minDelay(900);
 
       const meRes = await api.get("/users/me");
@@ -410,7 +410,7 @@ export default function AdminPage({ loggedInUser, setLoggedInUser, onLogout, ctf
       const meRes = await api.get("/users/me");
       setLoggedInUser?.(meRes.data);
       loadUsers();
-      window.dispatchEvent(new Event("ctf-refresh"));
+      window.dispatchEvent(new CustomEvent("ctf-refresh", { detail: { force: true } }));
 
       setMfaRequired(false);
       setLoginMfaCode("");
