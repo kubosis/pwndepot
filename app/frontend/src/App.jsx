@@ -28,6 +28,7 @@ import MfaReset from "./components/MfaReset";
 import ReadMore from "./components/ReadMore";
 import AccountDelete from "./components/AccountDelete";
 import DualLicense from "./components/DualLicense";
+import Canonical from "./components/Canonical";
 
 import { api } from "./config/api";
 import { DEMO_MODE } from "./config/demo";
@@ -467,6 +468,7 @@ function AppContent() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <Canonical />
       {DEMO_MODE && <DemoBanner />}
 
       {/* Blur only the app behind the modal (not the modal itself) */}
