@@ -11,6 +11,7 @@ RUN apt-get update && \
 # Munka könyvtár
 WORKDIR /challenges/hidden_network_treasure
 
+   
 # Másoljuk be a scriptet
 COPY generate_pcap.sh /usr/local/bin/generate_pcap.sh
 
