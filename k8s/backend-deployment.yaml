@@ -51,7 +51,7 @@ spec:
 
         # CORS
         - name: ALLOWED_ORIGINS
-          value: "http://localhost:5173,http://127.0.0.1:5173,http://77.42.44.18"
+          value: "http://localhost:5173,http://127.0.0.1:5173,http://77.42.44.18,https:pwndep0t.com"
 
         # Email Settings
         - name: SMTP_HOST
