@@ -13,7 +13,6 @@ RUN go mod download
 COPY . .
 RUN go build -o storedxss storedxss.go
 
-
 # ============================================================
 # Stage 2 — Runtime (lightweight & optimized)
 # ============================================================
