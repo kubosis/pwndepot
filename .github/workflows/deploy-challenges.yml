@@ -1,6 +1,7 @@
 name: Deploy Challenges
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
