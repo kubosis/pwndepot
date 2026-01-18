@@ -61,11 +61,11 @@ spec:
         - name: SMTP_USE_TLS
           value: "true"
         - name: SMTP_USERNAME
-          value: "ourmail@gmail.com"
+          value: "contact@pwndep0t.com"
         - name: MAIL_FROM
-          value: "ISEP CTF <ourmail@gmail.com>"
+          value: "PwnDepot <contact@pwndep0t.com>"
         - name: CONTACT_RECEIVER_EMAIL # TODO
-          value: "ourmail@gmail.com"
+          value: "contact@pwndep0t.com"
         - name: JWT_ALGORITHM
           value: "HS256"
         - name: ACCESS_TOKEN_EXPIRE_MINUTES
