@@ -20,6 +20,7 @@ RUN uv sync --frozen --no-install-project --no-dev
 
 COPY app/backend /project/app/backend
 COPY assets/pwndepot_standard.png /project/assets/pwndepot_standard.png
+COPY challenges /project/challenges
 
 ENV PATH="/project/.venv/bin:$PATH"
 
