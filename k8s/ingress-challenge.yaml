@@ -1,23 +1,27 @@
-# k8s/ingress-challenge.yaml
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: challenge-ingress
   namespace: default
   annotations:
-    # 1. Use Traefik
     kubernetes.io/ingress.class: traefik
-    
-    # 2. Attach the middleware we created above
-    # Format: <namespace>-<middleware-name>@kubernetescrd
-    traefik.ingress.kubernetes.io/router.middlewares: default-challenge-strip-prefix@kubernetescrd
-
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure   
+    traefik.ingress.kubernetes.io/router.middlewares: default-redirect-to-https@kubernetescrd,default-redirect-to-www@kubernetescrd,default-challenge-strip-prefix@kubernetescrd
 spec:
   rules:
   - host: pwndep0t.com
     http:
       paths:
-      # Match specifically the challenge path
+      - path: /challenge
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 8000
+  - host: www.pwndep0t.com
+    http:
+      paths:
       - path: /challenge
         pathType: Prefix
         backend:

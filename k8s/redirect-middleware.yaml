@@ -1,0 +1,20 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-to-https
+  namespace: default
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-to-www
+  namespace: default
+spec:
+  redirectRegex:
+    regex: ^https?://pwndep0t\.com/(.*)
+    replacement: https://www.pwndep0t.com/$1
+    permanent: true
