@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: ghcr.io/kubosis/pwndepot/frontend:1af78a6
+        image: ghcr.io/kubosis/pwndepot/frontend:8b89974
         ports:
         - containerPort: 80
         env:
