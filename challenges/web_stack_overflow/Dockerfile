@@ -12,7 +12,7 @@ USER ctf
 
 ENV CTF_FLAG=FLAG{example_flag}
 
-EXPOSE 8080
+EXPOSE 8000
 
 
 CMD ["./src/server"]
