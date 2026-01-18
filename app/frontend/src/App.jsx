@@ -268,48 +268,31 @@ function AppContent() {
     return () => window.removeEventListener("auth-logout", handler);
   }, [navigate]);
 
+  const isAdminRoute = location.pathname.startsWith("/admin");
+
   useEffect(() => {
     if (DEMO_MODE) return;
-    if (location.pathname.startsWith("/admin")) return;
-
-    // SSE only when CTF is active
     if (ctfActive !== true) return;
+    if (isAdminRoute) return;
 
-    let es = null;
-    let retryTimer = null;
-    let stopped = false;
+    const es = new EventSource("/api/v1/ctf-events");
 
-    const connect = () => {
-      if (stopped) return;
-
-      es = new EventSource("/api/v1/ctf-events");
-
-      const onChange = () => window.dispatchEvent(new Event("ctf-refresh"));
-      es.addEventListener("ctf_changed", onChange);
-
-      es.onerror = () => {
-        // if ctf has ended, backend returns 403 and interceptors do the refresh
-        // don't retry in an infinite loop
-        try { es?.close(); } catch { // intentionally ignore 
-          }
-
-        // small backoff when ctf is still active
-        if (retryTimer) clearTimeout(retryTimer);
-        retryTimer = setTimeout(() => {
-          if (!stopped && ctfActive === true) connect();
-        }, 3000);
-      };
+    const onChange = () => {
+      window.dispatchEvent(new CustomEvent("ctf-refresh", { detail: { force: true } }));
     };
 
-    connect();
+    es.addEventListener("ctf_changed", onChange);
+
+    es.onerror = () => {
+      // nothing - EventSource retries on his own
+    };
 
     return () => {
-      stopped = true;
-      if (retryTimer) clearTimeout(retryTimer);
-      try { es?.close(); } catch { // intentionally ignored
-        }
+      es.removeEventListener("ctf_changed", onChange);
+      es.close();
     };
-  }, [ctfActive, location.pathname]);
+  }, [ctfActive, isAdminRoute]);
+
 
 
   // Protected user route
