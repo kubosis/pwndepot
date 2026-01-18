@@ -20,6 +20,7 @@ class K8sChallengeManager:
     _lock = Lock()
 
     def __new__(cls):
+        # double - check pattern not to lock threads
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
@@ -27,6 +28,7 @@ class K8sChallengeManager:
         return cls._instance
 
     def __init__(self):
+        # Only initialize once
         if hasattr(self, "_initialized"):
             logger.debug("K8sChallengeManager already exists... reusing the instance")
             return
