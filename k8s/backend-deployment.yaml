@@ -51,7 +51,7 @@ spec:
 
         # CORS
         - name: ALLOWED_ORIGINS
-          value: "http://localhost:5173,http://127.0.0.1:5173,http://77.42.44.18,https://pwndep0t.com"
+          value: "https://www.pwndep0t.com,https://pwndep0t.com"
 
         # Email Settings
         - name: SMTP_HOST
@@ -74,7 +74,7 @@ spec:
         - name: REDIS_URL
           value: "redis://redis:6379/0"
         - name: FRONTEND_DOMAIN
-          value: "https://pwndep0t.com"
+          value: "https://www.pwndep0t.com"
 
         - name: K8S_CHALLENGE_NAMESPACE
           value: ctf-challenges
