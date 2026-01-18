@@ -140,7 +140,6 @@ setup_logging()
 
 app = _create_fastapi_backend(settings)
 
-
 if __name__ == "__main__":
     uvicorn.run(
         "app.backend.main:app",
