@@ -73,7 +73,8 @@ spec:
 
         - name: REDIS_URL
           value: "redis://redis:6379/0"
-
+        - name: FRONTEND_DOMAIN
+          value: "https://pwndep0t.com"
 
         resources:
           limits:
