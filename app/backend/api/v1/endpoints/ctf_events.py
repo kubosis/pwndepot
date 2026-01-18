@@ -11,7 +11,6 @@ from starlette.responses import StreamingResponse
 
 from app.backend.config.redis import redis_client
 from app.backend.config.settings import get_settings
-from app.backend.utils.limiter import limiter
 from app.backend.utils.sse_bus import sse_bus
 
 settings = get_settings()
@@ -39,7 +38,6 @@ def _sse_conn_key(ip: str) -> str:
 
 
 @router.get("/ctf-events")
-@limiter.limit("20/minute")
 async def ctf_events(request: Request):
     """
     SSE stream.
