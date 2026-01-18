@@ -14,4 +14,5 @@ ENV CTF_FLAG=FLAG{example_flag}
 
 EXPOSE 8080
 
+
 CMD ["./src/server"]
