@@ -127,8 +127,17 @@ class K8sChallengeManager:
             return f"{name}.{self.namespace}.svc.cluster.local:{port}"
 
         except ApiException as e:
-            logger.error(f"K8s API Error: {e}")
-            return None
+            if e.status == 409:  # Conflict (Already Exists)
+                print(f"Pod {name} already exists.")
+                existing_pod = self.core_v1.read_namespaced_pod(name, self.namespace)
+
+                if existing_pod.status.phase in ["Succeeded", "Failed"]:
+                    print(f"Deleting dead pod {name}...")
+                    self.core_v1.delete_namespaced_pod(name, self.namespace)
+                    return await self.spawn_instance(user_id, challenge_id, image, port, ttl_seconds)
+                return existing_pod.status.pod_ip
+            else:
+                raise  # Re-raise other errors
 
     def terminate_instance(self, user_id: int, challenge_id: int):
         name = self.get_pod_name(user_id, challenge_id)
