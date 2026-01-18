@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - 'app/**'        # Only run if app code changes
-      - 'k8s/**'        # or the manifests change
       - '.github/workflows/deploy.yml'
 
 env:
