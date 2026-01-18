@@ -142,8 +142,10 @@ function AppContent() {
 
     const inFlightRef = useRef(false);
     const cooldownUntilRef = useRef(0);
+    const lastOkFetchMsRef = useRef(0);
+    const MIN_GAP_MS = 5000;
 
-    const fetchCtfStatus = useCallback(async () => {
+    const fetchCtfStatus = useCallback(async (force = false) => {
       if (DEMO_MODE) {
         setCtfActive(true);
         setCtfSecondsLeft(7 * 24 * 3600);
@@ -151,33 +153,34 @@ function AppContent() {
       }
 
       const nowMs = Date.now();
-      if (nowMs < cooldownUntilRef.current) return;
+
+      if (!force) {
+        if (nowMs - lastOkFetchMsRef.current < MIN_GAP_MS) return;
+        if (nowMs < cooldownUntilRef.current) return;
+      }
+
       if (inFlightRef.current) return;
 
       inFlightRef.current = true;
       try {
         const res = await api.get("/ctf-status");
 
-        const active = !!res.data?.active;
-        const remaining = res.data?.remaining_seconds;
+        setCtfActive(!!res.data?.active);
+        setCtfSecondsLeft(typeof res.data?.remaining_seconds === "number" ? res.data.remaining_seconds : null);
 
-        setCtfActive(active);
-        setCtfSecondsLeft(typeof remaining === "number" ? remaining : null);
+        lastOkFetchMsRef.current = Date.now();
       } catch (err) {
         const status = err?.response?.status;
-
         if (status === 429) {
-          cooldownUntilRef.current = Date.now() + 8000; 
+          cooldownUntilRef.current = Date.now() + 8000;
           return;
         }
-
         const code = err?.response?.data?.code || err?.response?.data?.detail?.code;
         if (code === "CTF_ENDED") {
           setCtfActive(false);
           setCtfSecondsLeft(0);
           return;
         }
-
         console.warn("Failed to fetch CTF status", err);
       } finally {
         inFlightRef.current = false;
@@ -224,7 +227,11 @@ function AppContent() {
   }, [fetchCtfStatus, location.pathname]);
 
   useEffect(() => {
-    const handler = () => fetchCtfStatus();
+    const handler = (e) => {
+      const force = !!e?.detail?.force;
+      fetchCtfStatus(force);
+    };
+
     window.addEventListener("ctf-refresh", handler);
     return () => window.removeEventListener("ctf-refresh", handler);
   }, [fetchCtfStatus]);
