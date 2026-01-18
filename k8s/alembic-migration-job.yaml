@@ -18,7 +18,7 @@ spec:
       containers:
       - name: migration
         # update tag
-        image: ghcr.io/kubosis/pwndepot/backend:362ee04
+        image: ghcr.io/kubosis/pwndepot/backend:ac9e100
 
         command: ["/bin/sh", "-c"]
         args:
