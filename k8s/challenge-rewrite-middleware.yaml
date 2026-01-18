@@ -1,16 +1,10 @@
-apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
+# k8s/challenge-rewrite-middleware.yaml
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
 metadata:
-  name: letsencrypt-prod
+  name: challenge-strip-prefix
   namespace: default
 spec:
-  acme:
-    # The Let's Encrypt Production Server
-    server: https://acme-v02.api.letsencrypt.org/directory
-    email: admin.ctf.isep@proton.me
-    privateKeySecretRef:
-      name: letsencrypt-prod
-    solvers:
-    - http01:
-        ingress:
-          class: traefik
+  stripPrefix:
+    prefixes:
+      - "/challenge"
