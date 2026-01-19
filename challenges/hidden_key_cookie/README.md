@@ -1,9 +1,11 @@
 A web challenge: the secret is hidden in the image metadata. Use it to craft a valid session cookie for `admin` and access `/flag`.
 
 Hints:
+- The image is not linked directly on the page; try common static paths (e.g. /static/logo.png).
 - Inspect the PNG metadata (look for textual metadata).
 - Signature is HMAC-SHA256(username, secret).
 - Cookie format: `session=USERNAME|HEX_SIGNATURE`
+
 
 Two quick methods:
 1. Browser (DevTools Console):
