@@ -260,7 +260,35 @@ async def list_challenges(challenge_repo: ChallengesRepositoryDep):
     return [_construct_challenge_response(c) for c in db_chals]
 
 
-@router.get("/rankings", response_model=list[TeamWithScoresInResponse], status_code=status.HTTP_200_OK)
+def _enrich_team(team: TeamWithScoresInResponse):
+    scores = team.scores
+
+    if not scores:
+        final_score = 0
+        total_points = 0
+        first_reached_time = None
+    else:
+        final_score = scores[-1]["score"]
+        total_points = scores[-1]["score"]
+
+        first_reached_time = next(
+            (s["date_time"] for s in scores if s["score"] == final_score),
+            scores[0]["date_time"],
+        )
+
+    return {
+        "team": team,
+        "final_score": final_score,
+        "total_points": total_points,
+        "first_reached_time": first_reached_time,
+    }
+
+
+@router.get(
+    "/rankings",
+    response_model=list[TeamWithScoresInResponse],
+    status_code=status.HTTP_200_OK,
+)
 async def get_rankings(team_repo: TeamsRepositoryDep):
     teams = await team_repo.list_all_teams()
     response: list[TeamWithScoresInResponse] = []
@@ -285,6 +313,9 @@ async def get_rankings(team_repo: TeamsRepositoryDep):
             )
             total += points
 
+        # 1. sort chronologically for tie breaking
+        score_records.sort(key=lambda x: x["date_time"])
+
         response.append(
             TeamWithScoresInResponse(
                 team_id=t.id,
@@ -294,8 +325,18 @@ async def get_rankings(team_repo: TeamsRepositoryDep):
             )
         )
 
-    response.sort(key=lambda x: x.total_score, reverse=True)
-    return response
+    enriched = [_enrich_team(t) for t in response]
+
+    enriched.sort(
+        key=lambda x: (
+            -x["final_score"],  # finalScore DESC
+            -x["total_points"],  # totalPoints DESC
+            x["first_reached_time"],  # firstReachedTime ASC
+        )
+    )
+
+    # return the list of TeamWithScoresInResponse as expected
+    return [x["team"] for x in enriched]
 
 
 @router.get("/{challenge_id}", response_model=ChallengeInResponse, status_code=status.HTTP_200_OK)
