@@ -785,6 +785,7 @@ async def get_user_profile(
     request: Request,
     account_repo: UserRepositoryDep,
     team_repo: TeamsRepositoryDep,
+    challenge_repo: ChallengesRepositoryDep,
 ):
     user = await account_repo.read_account_by_username(username)
     if not user:
@@ -792,11 +793,14 @@ async def get_user_profile(
 
     team = await team_repo.get_team_for_user(user.id)
 
+    score = await challenge_repo.get_user_total_score(user.id)
+
     return PublicUserProfile(
         id=user.id,
         username=user.username,
         team_id=team.id if team else None,
         team_name=team.name if team else None,
+        score=score,
     )
 
 
