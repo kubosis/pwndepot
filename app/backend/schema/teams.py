@@ -28,11 +28,25 @@ class TeamInDelete(BaseSchemaModel):
     team_id: int | None = None
 
 
+class TeamInviteExchangeRequest(BaseSchemaModel):
+    token: constr(min_length=10, max_length=4096)  # token is long
+
+
+class TeamInviteExchangeResponse(BaseSchemaModel):
+    exchange_code: str
+
+
+class TeamJoinViaExchange(BaseSchemaModel):
+    exchange_code: constr(min_length=16, max_length=64)
+    password: constr(min_length=1, max_length=64)
+
+
 # -----------------------------
 # BASIC USER REPRESENTATION
 # -----------------------------
 class UserInTeam(BaseSchemaModel):
     username: str
+    score: int = 0
 
 
 # -----------------------------
@@ -42,6 +56,7 @@ class ScoreRecord(BaseSchemaModel):
     date_time: datetime
     obtained_by: str
     score: int
+    challenge_category: str | None = None
 
 
 # -----------------------------
@@ -80,6 +95,7 @@ class FullTeamInResponse(BaseSchemaModel):
     class Config:
         from_attributes = True
 
+
 # -----------------------------
 # INVITE TOKEN RESPONSE
 # -----------------------------
@@ -94,3 +110,11 @@ class TeamInviteInfo(BaseSchemaModel):
 class TeamJoinViaInvite(BaseSchemaModel):
     token: str
     password: str
+
+
+class TeamLeaderboardEntry(BaseSchemaModel):
+    rank: int
+    team_id: int
+    team_name: str
+    score: int
+    captain_username: str | None = None

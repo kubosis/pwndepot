@@ -3,16 +3,18 @@ from typing import Annotated
 
 import jwt
 from fastapi import Depends, HTTPException, Request, status
+from loguru import logger
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.backend.config.settings import get_settings
-from app.backend.db.models import RoleEnum, UserTable
+from app.backend.db.models import RoleEnum, StatusEnum, UserTable
 from app.backend.db.session import AsyncSessionLocal
 from app.backend.repository.base import BaseCRUDRepository
 from app.backend.repository.challenges import ChallengesCRUDRepository
 from app.backend.repository.teams import TeamsCRUDRepository
 from app.backend.repository.users import UserCRUDRepository
+from app.backend.utils.admin_mfa import is_admin_mfa_valid
 
 settings = get_settings()
 
@@ -38,6 +40,8 @@ class TokenPayload(BaseModel):
     nbf: int | None = None
     iss: str | None = None
     type: str | None = None
+    mfv: bool | None = None
+    mfa_recovery: bool | None = None
 
 
 # -----------------------------
@@ -47,7 +51,6 @@ async def get_current_user(
     request: Request,
     session: AsyncSessionDep,
 ) -> UserTable:
-
     token = request.cookies.get("access_token")
     if not token:
         raise HTTPException(
@@ -59,33 +62,96 @@ async def get_current_user(
     try:
         payload = jwt.decode(
             token,
-            settings.SECRET_KEY,
+            settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM],
+            issuer="PwnDepot",
         )
         token_data = TokenPayload(**payload)
 
+        # Enforce access token only
+        if token_data.type != "access":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token type.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
     except jwt.ExpiredSignatureError as err:
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED,
-            "Token expired."
-        ) from err
+        logger.info("Error: Login attempt with invalid token")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token expired.") from err
 
     except (jwt.PyJWTError, ValidationError) as err:
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED,
-            "Invalid authentication token."
-        ) from err
-
+        logger.info("Error: Login attempt with invalid token")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid authentication token.") from err
 
     user = await session.get(UserTable, int(token_data.sub))
 
     if not user:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User no longer exists.")
+        logger.info("Error: User does not exist")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User does not exists.")
 
+    if user.status == StatusEnum.SUSPENDED:
+        logger.info(f"Error: Suspended user login attempt by {user.username}")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User suspended.")
+
+    if not user.is_email_verified:
+        logger.info(f"Error: Unverified email login attempt by {user.username}")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Unverified email.")
+
+    # --- MFA LOGIC ---
+    # User has MFA enabled, but this access token is NOT MFA-verified (mfv=False).
+    # Block full authentication until /mfa/verify is completed.
+    if user.mfa_enabled and not token_data.mfv:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "MFA_REQUIRED"},
+        )
+    # ---------------------
+
+    user.token_data = token_data.model_dump()
     return user
 
 
 CurrentUserDep = Annotated[UserTable, Depends(get_current_user)]
+
+
+# -----------------------------
+# PARTIALLY LOGGED IN USER DEPENDENCY (MFA)
+# -----------------------------
+async def get_current_user_partial(
+    request: Request,
+    session: AsyncSessionDep,
+) -> UserTable:
+    """
+    Same as get_current_user, but DOES NOT enforce mfa_verified=True.
+    Used ONLY for the MFA verification step.
+    """
+    token = request.cookies.get("access_token")
+    if not token:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated.")
+
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM], issuer="PwnDepot")
+        token_data = TokenPayload(**payload)
+        if token_data.type != "access":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token type.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    except (jwt.PyJWTError, ValidationError):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token.") from None
+
+    user = await session.get(UserTable, int(token_data.sub))
+
+    if not user:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found.") from None
+
+    user.token_data = token_data.model_dump()
+    return user
+
+
+PartiallyLoggedInUserDep = Annotated[UserTable, Depends(get_current_user_partial)]
 
 
 # -----------------------------
@@ -100,6 +166,21 @@ async def get_current_admin(current_user: CurrentUserDep) -> UserTable:
 CurrentAdminDep = Annotated[UserTable, Depends(get_current_admin)]
 
 
+# ---------------------------
+# Admin MFA
+# ---------------------------
+async def RequireAdminMFA(current_admin: CurrentAdminDep):
+    if not current_admin.mfa_enabled:
+        return
+
+    ok = await is_admin_mfa_valid(current_admin.id)
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "MFA_REQUIRED", "message": "Admin MFA verification required"},
+        )
+
+
 # -----------------------------
 # SELF OR ADMIN
 # -----------------------------
@@ -108,7 +189,6 @@ async def get_self_or_admin(
     current_user: CurrentUserDep,
     session: AsyncSessionDep,
 ) -> UserTable:
-
     target = await session.get(UserTable, user_id)
     if not target:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found.")
@@ -140,14 +220,65 @@ def get_repository(repo_type: type[BaseCRUDRepository]) -> Callable:
 # -----------------------------
 # CORRECT REPOSITORY DEPENDENCIES
 # -----------------------------
-UserRepositoryDep = Annotated[
-    UserCRUDRepository, Depends(get_repository(UserCRUDRepository))
-]
+UserRepositoryDep = Annotated[UserCRUDRepository, Depends(get_repository(UserCRUDRepository))]
 
-TeamsRepositoryDep = Annotated[
-    TeamsCRUDRepository, Depends(get_repository(TeamsCRUDRepository))
-]
+TeamsRepositoryDep = Annotated[TeamsCRUDRepository, Depends(get_repository(TeamsCRUDRepository))]
 
-ChallengesRepositoryDep = Annotated[
-    ChallengesCRUDRepository, Depends(get_repository(ChallengesCRUDRepository))
-]
+ChallengesRepositoryDep = Annotated[ChallengesCRUDRepository, Depends(get_repository(ChallengesCRUDRepository))]
+
+
+async def RequireNonRecoverySession(current_user: CurrentUserDep):
+    if current_user.token_data.get("mfa_recovery"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "RECOVERY_SESSION",
+                "message": "This action is not allowed during MFA recovery session. Please reset MFA first.",
+            },
+        )
+
+
+async def RequireAdminNonRecovery(current_admin: CurrentAdminDep):
+    if current_admin.token_data.get("mfa_recovery"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "ADMIN_RECOVERY_SESSION",
+                "message": "Admin actions are disabled during MFA recovery session.",
+            },
+        )
+
+
+async def RequireAnonymous(request: Request):
+    """
+    Block login/register when user already has a valid access token cookie.
+    Treat BOTH fully-authenticated and MFA-partial sessions as 'already signed in/in progress'.
+    """
+    token = request.cookies.get("access_token")
+    if not token:
+        return
+
+    try:
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+            issuer="PwnDepot",
+            options={"verify_aud": False},
+        )
+        token_data = TokenPayload(**payload)
+
+        # Only block if it's an access token and not expired.
+        # (jwt.decode already checks exp by default)
+        if token_data.type == "access":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"code": "ALREADY_LOGGED_IN", "message": "You are already logged in."},
+            )
+
+    except jwt.ExpiredSignatureError:
+        # expired cookie -> treat as anonymous
+        return
+    except (jwt.PyJWTError, ValidationError):
+        # invalid garbage cookie -> treat as anonymous
+        return

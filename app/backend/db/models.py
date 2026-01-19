@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 from typing import ClassVar
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -14,23 +14,44 @@ class RoleEnum(enum.Enum):
     USER = "user"
 
 
+class StatusEnum(enum.Enum):
+    SUSPENDED = "suspended"
+    ACTIVE = "active"
+
+
 class UserTable(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    username: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
-    email: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    username: Mapped[str] = mapped_column(String(64), nullable=False)
+    email: Mapped[str] = mapped_column(String(128), nullable=False)
     role: Mapped[RoleEnum] = mapped_column(
         Enum(RoleEnum, name="role_enum", native_enum=False),
         nullable=False,
         default=RoleEnum.USER,
     )
-
+    verification_token = mapped_column(String(128), nullable=True)
+    verification_token_expires_at = mapped_column(DateTime(timezone=True), nullable=True)
 
     hashed_password: Mapped[str] = mapped_column(String(1024), nullable=False)
     is_email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    mfa_backup_codes: Mapped[list["MFABackupCodeTable"]] = relationship(
+        "MFABackupCodeTable", back_populates="user", cascade="all, delete-orphan"
+    )
+
+    status: Mapped[StatusEnum] = mapped_column(
+        Enum(StatusEnum, name="status_enum", native_enum=False),
+        nullable=False,
+        default=StatusEnum.ACTIVE,
+    )
+
+    # mfa
+    mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    mfa_secret: Mapped[str | None] = mapped_column(String(128), default=None, nullable=True)
 
     # relationships
     team_associations: Mapped[list["UserInTeamTable"]] = relationship(
@@ -46,7 +67,73 @@ class UserTable(Base):
         "challenge_associations", "challenge"
     )
 
+    __table_args__ = (
+        # username case-insensitive UNIQUE
+        Index(
+            "uq_users_username_lower",
+            func.lower(username),
+            unique=True,
+        ),
+        Index(
+            "uq_users_email_lower",
+            func.lower(email),
+            unique=True,
+        ),
+    )
+
     __mapper_args__: ClassVar[dict] = {"eager_defaults": True}
+
+
+class MFABackupCodeTable(Base):
+    __tablename__ = "mfa_backup_codes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+
+    code_hash: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped["UserTable"] = relationship("UserTable", back_populates="mfa_backup_codes")
+
+    __table_args__ = (Index("ix_mfa_backup_codes_user_unused", "user_id", "used_at"),)
+
+    __mapper_args__: ClassVar[dict] = {"eager_defaults": True}
+
+
+class ContactMessageTable(Base):
+    __tablename__ = "contact_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    email: Mapped[str] = mapped_column(String(128), nullable=False)
+    message: Mapped[str] = mapped_column(String(2000), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), index=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __mapper_args__: ClassVar[dict] = {"eager_defaults": True}
+
+
+class SecurityDevice(Base):
+    __tablename__ = "security_devices"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    fingerprint = Column(String(64), nullable=False)
+
+    first_seen = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    last_seen = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+
+    user_agent = Column(Text, nullable=True)
+    ip_prefix = Column(String(32), nullable=True)
 
 
 class DifficultyEnum(enum.Enum):
@@ -55,11 +142,18 @@ class DifficultyEnum(enum.Enum):
     HARD = "hard"
 
 
+class ChallengeProtocolEnum(enum.Enum):
+    HTTP = "http"
+    TCP = "tcp"
+
+
 class ChallengeTable(Base):
     __tablename__ = "challenges"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    category: Mapped[str] = mapped_column(String(64), nullable=False, default="Uncategorized")
+    author: Mapped[str] = mapped_column(String(64), nullable=False, default="unknown")
     path: Mapped[str] = mapped_column(String(256), nullable=False, unique=True)
     description: Mapped[str] = mapped_column(String(512))
     hint: Mapped[str] = mapped_column(String(512))
@@ -68,15 +162,25 @@ class ChallengeTable(Base):
     # or do we want to deploy it
     is_download: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
-    difficulty: Mapped[Enum] = mapped_column(
+    difficulty: Mapped[DifficultyEnum] = mapped_column(
         Enum(DifficultyEnum, name="difficulty_enum", native_enum=False),
         nullable=False,
     )
 
+    protocol: Mapped[ChallengeProtocolEnum] = mapped_column(
+        Enum(ChallengeProtocolEnum, name="challenge_protocol_enum", native_enum=False),
+        nullable=False,
+        default=ChallengeProtocolEnum.HTTP,
+    )
+    expose_tcp: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
     points: Mapped[int] = mapped_column(Integer, nullable=False)
 
+    image_name: Mapped[str] = mapped_column(String(128))
+    internal_port: Mapped[int] = mapped_column(Integer, default=80)
+
     # optional stored flag (if provided, used for validation)
-    flag: Mapped[str | None] = mapped_column(String(512), nullable=True, default=None)
+    flag: Mapped[str | None] = mapped_column(String(128), nullable=True, default=None)
 
     # per-challenge CTF state
     ctf_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -110,6 +214,8 @@ class UserCompletedChallengeTable(Base):
 
     __mapper_args__: ClassVar[dict] = {"eager_defaults": True}
 
+    __table_args__ = (Index("uq_user_challenge_once", "user_id", "challenge_id", unique=True),)
+
 
 class TeamTable(Base):
     __tablename__ = "teams"
@@ -142,12 +248,9 @@ class TeamTable(Base):
         cascade="all, delete-orphan",
     )
 
-    users: AssociationProxy[list["UserTable"]] = association_proxy(
-        "user_associations", "user"
-    )
+    users: AssociationProxy[list["UserTable"]] = association_proxy("user_associations", "user")
 
     __mapper_args__: ClassVar[dict] = {"eager_defaults": True}
-
 
 
 class UserInTeamTable(Base):
@@ -162,5 +265,78 @@ class UserInTeamTable(Base):
 
     user: Mapped["UserTable"] = relationship(back_populates="team_associations")
     team: Mapped["TeamTable"] = relationship(back_populates="user_associations")
+
+    __mapper_args__: ClassVar[dict] = {"eager_defaults": True}
+
+
+class RefreshTokenTable(Base):
+    __tablename__ = "refresh_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    family_id: Mapped[str] = mapped_column(String(64), index=True)
+
+    token_hash: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    revoked: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    replaced_by: Mapped[int | None] = mapped_column(ForeignKey("refresh_tokens.id"))
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+
+
+class CTFStateTable(Base):
+    __tablename__ = "ctf_state"
+
+    # Single-row table. We always use id=1.
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    paused_remaining_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    started_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+# --- ADD-ON: team-scoped completion table (team gets points only once per challenge) ---
+
+
+class TeamCompletedChallengeTable(Base):
+    __tablename__ = "team_completed_challenges"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+
+    team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"), index=True)
+    challenge_id: Mapped[int] = mapped_column(ForeignKey("challenges.id", ondelete="CASCADE"), index=True)
+
+    # Optional audit field: who was first in the team
+    completed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        # Enforce: one team can earn points for a challenge only once
+        Index("uq_team_challenge_once", "team_id", "challenge_id", unique=True),
+    )
 
     __mapper_args__: ClassVar[dict] = {"eager_defaults": True}

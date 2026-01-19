@@ -1,0 +1,132 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        # USE LOCAL IMAGE
+        image: pwndepot-backend:local
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8000
+        # Load Secrets (created manually in previous steps)
+        envFrom:
+        - secretRef:
+            name: db-creds
+        - secretRef:
+            name: backend-keys
+        env:
+        # OVERRIDE PROD SETTINGS FOR LOCAL DEV
+        - name: ENV
+          value: "dev"
+        - name: API_VERSION
+          value: "v1"
+        - name: UVICORN_SERVER_HOST
+          value: "0.0.0.0"
+        - name: UVICORN_SERVER_PORT
+          value: "8000"
+        # Database URLs (constructed from secret vars)
+        - name: SQLALCHEMY_POSTGRE_SYNC_URL
+          value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)"
+        - name: SQLALCHEMY_POSTGRE_ASYNC_URL
+          value: "postgresql+asyncpg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)"
+        # CORS & Network
+        - name: ALLOWED_ORIGINS
+          value: "http://pwndepot.com,http://localhost,http://127.0.0.1"
+        - name: REDIS_URL
+          value: "redis://redis:6379/0"
+        resources:
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: default
+spec:
+  selector:
+    app: backend
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+      - name: frontend
+        # USE LOCAL IMAGE
+        image: pwndepot-frontend:local
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 80
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: default
+spec:
+  selector:
+    app: frontend
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migration-local
+  namespace: default
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      containers:
+      - name: migration
+        # USE LOCAL IMAGE
+        image: pwndepot-backend:local
+        imagePullPolicy: Never
+        command: ["/bin/sh", "-c"]
+        args:
+          - "alembic -c /project/app/backend/alembic.ini upgrade head"
+        envFrom:
+        - secretRef:
+            name: db-creds
+        - secretRef:
+            name: backend-keys
+        env:
+        - name: SQLALCHEMY_POSTGRE_SYNC_URL
+          value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)"
+      restartPolicy: Never

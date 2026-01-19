@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pwndepot-challenge
+  namespace: pwndepot
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.middlewares: pwndepot-challenge-rewrite@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: pwndep0t.local
+      http:
+        paths:
+          - path: /challenge
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 8000

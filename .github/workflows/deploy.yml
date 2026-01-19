@@ -1,0 +1,91 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/**'        # Only run if app code changes
+      - '.github/workflows/deploy.yml'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+permissions:
+  contents: write       # Required to commit the new tag back to the repo
+  packages: write       # Required to push to GHCR
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    outputs:
+      short_sha: ${{ steps.vars.outputs.short_sha }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GH_TOKEN }}
+
+      - name: Generate Short SHA
+        id: vars
+        run: echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      # --- BUILD BACKEND ---
+      - name: Build and push Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./app/backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend:${{ steps.vars.outputs.short_sha }}
+
+      # --- BUILD FRONTEND ---
+      - name: Build and push Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./app/frontend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:${{ steps.vars.outputs.short_sha }}
+
+  update-manifests:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Update Kubernetes manifests
+        run: |
+          cd k8s
+          
+          # backend manifest
+          sed -i "s|image: .*/backend:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend:${{ needs.build-and-push.outputs.short_sha }}|g" backend-deployment.yaml
+          
+          # db migrations
+          sed -i "s|image: .*/backend:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend:${{ needs.build-and-push.outputs.short_sha }}|g" alembic-migration-job.yaml
+          
+          # frontend manifest
+          sed -i "s|image: .*/frontend:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:${{ needs.build-and-push.outputs.short_sha }}|g" frontend-deployment.yaml
+          
+          if [[ -n $(git status -s) ]]; then
+            git config user.name "GitHub Action"
+            git config user.email "action@github.com"
+            git add .
+            git commit -m "Update image tags to ${{ needs.build-and-push.outputs.short_sha }}"
+            git push
+          else
+            echo "No changes to manifests."
+          fi

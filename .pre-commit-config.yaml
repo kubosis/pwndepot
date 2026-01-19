@@ -20,3 +20,10 @@ repos:
         name: semantic commit message check
         stages: [commit-msg]
         args: [feat, fix, docs, style, refactor, test, chore, ci, build, cicd]
+
+  # --- Gitleaks (secrets detection) ---
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.2
+    hooks:
+      - id: gitleaks
+        exclude: (^|/)tests/ # as there are hardcoded mock secrets

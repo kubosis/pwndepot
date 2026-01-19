@@ -1,0 +1,107 @@
+name: Deploy Challenges
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'challenges/**'  # Trigger only when challenges change
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # JOB 1: Find which challenges changed and have a Dockerfile
+  find-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required to compare commits
+
+      - name: Detect changed challenges
+        id: set-matrix
+        run: |
+          echo "Detecting changes..."
+          
+          # Get list of changed files between the previous commit and current
+          # If this is the first push or force push, fall back to just HEAD
+          if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+             CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          else
+             CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+          fi
+
+          # 1. Filter for files in 'challenges/'
+          # 2. Extract the first subfolder name (challenge name)
+          # 3. Sort and make unique
+          CANDIDATES=$(echo "$CHANGED_FILES" | grep "^challenges/" | cut -d/ -f2 | sort -u)
+
+          echo "Changed folders: $CANDIDATES"
+
+          # Build JSON Array of challenges that HAVE a Dockerfile
+          JSON_ARRAY="["
+          FIRST=1
+          
+          for chal in $CANDIDATES; do
+            # Only build if a Dockerfile exists
+            if [ -f "challenges/$chal/Dockerfile" ]; then
+              if [ $FIRST -eq 0 ]; then JSON_ARRAY="$JSON_ARRAY,"; fi
+              JSON_ARRAY="$JSON_ARRAY\"$chal\""
+              FIRST=0
+            fi
+          done
+          JSON_ARRAY="$JSON_ARRAY]"
+
+          echo "Matrix configuration: $JSON_ARRAY"
+          echo "matrix=$JSON_ARRAY" >> $GITHUB_OUTPUT
+
+  # JOB 2: Build and Push only the identified challenges
+  build-and-push:
+    needs: find-changes
+    # Skip if matrix is empty (no deployable challenges changed)
+    if: ${{ needs.find-changes.outputs.matrix != '[]' && needs.find-changes.outputs.matrix != '' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        challenge: ${{ fromJson(needs.find-changes.outputs.matrix) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          # Image name format: ghcr.io/owner/repo/challenge-name
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.challenge }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short
+
+      - name: Build and push ${{ matrix.challenge }}
+        uses: docker/build-push-action@v5
+        with:
+          context: ./challenges/${{ matrix.challenge }}
+          file: ./challenges/${{ matrix.challenge }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

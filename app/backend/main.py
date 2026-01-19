@@ -3,14 +3,23 @@ import os
 import fastapi
 import uvicorn
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from slowapi.util import get_remote_address
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.backend.api.v1.router import api_router
 from app.backend.config.settings import BackendBaseSettings, get_settings
-from app.backend.logging_config import setup_logging
+from app.backend.middleware.ctf_gate import CTFGateMiddleware
+from app.backend.middleware.origin_check import OriginCheckMiddleware
+from app.backend.utils.ctf_redis import ctf_redis_bus
+from app.backend.utils.k8s_manager import K8sChallengeManager
+from app.backend.utils.limiter import limiter
+from app.backend.utils.logging_config import setup_logging
+from app.backend.utils.redis_sse_listener import (
+    start_redis_sse_listener,
+    stop_redis_sse_listener,
+)
 
 
 def _create_fastapi_backend(app_settings: BackendBaseSettings) -> fastapi.FastAPI:
@@ -20,28 +29,61 @@ def _create_fastapi_backend(app_settings: BackendBaseSettings) -> fastapi.FastAP
     - Rate limiting
     - Routers
     """
-
-    # -----------------------------------------
-    # RATE LIMITING
-    # -----------------------------------------
-    limiter = Limiter(
-        key_func=get_remote_address,
-        default_limits=[f"{app_settings.RATE_LIMIT_PER_MINUTE}/minute"],
-    )
-
+    K8sChallengeManager()  # noqa: we want to force k8s singleton manager initialization here
     backend_app = fastapi.FastAPI(**app_settings.backend_app_attributes)
 
     # -----------------------------------------
-    # CORS — dynamic by environment
+    # Redis - SSE bridge (MULTI-WORKER SAFE)
     # -----------------------------------------
-    backend_app.add_middleware(
-    CORSMiddleware,
-    allow_origins=app_settings.ALLOWED_ORIGINS_LIST,
-    allow_credentials=True, ## required for HTTP cookies
-    allow_methods=app_settings.ALLOWED_METHODS,
-    allow_headers=app_settings.ALLOWED_HEADERS,
+    backend_app.add_event_handler(
+        "startup",
+        start_redis_sse_listener,
     )
 
+    backend_app.add_event_handler(
+        "shutdown",
+        stop_redis_sse_listener,
+    )
+
+    backend_app.add_event_handler("shutdown", ctf_redis_bus.close)
+
+    # -----------------------------------------
+    # CTF Gate (global lock when CTF ended)
+    # -----------------------------------------
+    backend_app.add_middleware(
+        CTFGateMiddleware,
+        allowlist_exact={
+            "/",
+            "/contact",
+            "/privacy-policy",
+            "/terms-of-service",
+            "/acceptable-use-policy",
+            "/dual-license",
+            "/legal-notice",
+            "/api/v1/users/logout",
+            "/api/v1/users/logout/force",
+            "/api/v1/users/auth/refresh",
+            "/rankings",
+            "/read-more",
+            "/api/v1/ctf-events",
+            "/api/v1/ctf-status",
+            "/api/v1/mfa/verify",
+            "/api/v1/mfa/admin/verify",
+            "/api/v1/users/admin/login",
+            "/api/v1/users/me",
+            "/api/v1/contact",
+        },
+        allowlist_prefixes=(
+            "/assets",
+            "/favicon",
+            "/robots.txt",
+            "/api/v1/ctf-status",
+            "/team/",
+            "/profile/",
+            "/api/v1/users/profile/",
+            "/api/v1//teams/by-name/",
+        ),
+    )
 
     # -----------------------------------------
     # Rate limiting middleware
@@ -51,9 +93,38 @@ def _create_fastapi_backend(app_settings: BackendBaseSettings) -> fastapi.FastAP
     backend_app.add_middleware(SlowAPIMiddleware)
 
     # -----------------------------------------
+    # CORS — dynamic by environment
+    # -----------------------------------------
+    backend_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=app_settings.ALLOWED_ORIGINS_LIST,
+        allow_credentials=True,  ## required for HTTP cookies
+        allow_methods=app_settings.ALLOWED_METHODS,
+        allow_headers=app_settings.ALLOWED_HEADERS,
+    )
+
+    # -----------------------------------------
+    # CSRF / Origin check middleware
+    # -----------------------------------------
+    backend_app.add_middleware(
+        OriginCheckMiddleware,
+        allowed_origins=app_settings.ALLOWED_ORIGINS_LIST,
+        # enabled=app_settings.ENV == "prod",
+    )
+
+    # -----------------------------------------
+    # Proxy headers (REAL IP) - only if behind trusted proxies
+    # -----------------------------------------
+    trusted = settings.TRUSTED_PROXY_IPS_LIST or ["127.0.0.1"]
+
+    backend_app.add_middleware(
+        ProxyHeadersMiddleware,
+        trusted_hosts=trusted,
+    )
+
+    # -----------------------------------------
     # Routes
     # -----------------------------------------
-    
 
     backend_app.include_router(api_router)
 
@@ -73,9 +144,10 @@ app = _create_fastapi_backend(settings)
 if __name__ == "__main__":
     uvicorn.run(
         "app.backend.main:app",
-        host=settings.SERVER_HOST,
-        port=settings.SERVER_PORT,
-        reload = settings.DEBUG and os.getenv("RUNNING_IN_DOCKER", "0") != "1",  # disable reload in docker to avoid issues with file watchers
+        host=settings.UVICORN_SERVER_HOST,
+        port=settings.UVICORN_SERVER_PORT,
+        reload=settings.DEBUG
+        and os.getenv("RUNNING_IN_DOCKER", "0") != "1",  # disable reload in docker to avoid issues with file watchers
         workers=1,  # workers > 1 breaks reload + rate limiter in dev
-        log_level=settings.LOGGING_LEVEL,
+        log_level=settings.UVICORN_LOGGING_LEVEL,
     )

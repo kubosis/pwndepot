@@ -6,4 +6,5 @@ COPY app.py .
 COPY static ./static
 ENV FLASK_ENV=production
 EXPOSE 5000
+
 CMD [ "python", "app.py" ]

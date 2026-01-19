@@ -10,6 +10,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+	"net/url"
+	"net"
+	"strings"
 
 	bolt "go.etcd.io/bbolt"
 )
@@ -136,7 +139,7 @@ func handleIndex(w http.ResponseWriter, r *http.Request, db *bolt.DB) {
 
 func handlePost(w http.ResponseWriter, r *http.Request, db *bolt.DB) {
 	if r.Method != http.MethodPost {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, "./", http.StatusSeeOther)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
@@ -149,7 +152,7 @@ func handlePost(w http.ResponseWriter, r *http.Request, db *bolt.DB) {
 	}
 	content := r.FormValue("content")
 	if content == "" {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, "./", http.StatusSeeOther)
 		return
 	}
 
@@ -164,7 +167,23 @@ func handlePost(w http.ResponseWriter, r *http.Request, db *bolt.DB) {
 		return
 	}
 
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	next := r.FormValue("next")
+	if next == "" {
+		next = "./"
+	}
+
+
+	u, err := url.Parse(next)
+	if err != nil || u.IsAbs() || u.Host != "" {
+		next = "./"
+	}
+
+
+	if !strings.HasPrefix(next, "/challenge/") {
+		next = "./"
+	}
+
+	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 
 func handleAdmin(w http.ResponseWriter, r *http.Request, db *bolt.DB) {
@@ -206,19 +225,20 @@ func handleAdmin(w http.ResponseWriter, r *http.Request, db *bolt.DB) {
 }
 
 func handleBotInit(w http.ResponseWriter, r *http.Request) {
-	host := r.RemoteAddr
+    host := r.RemoteAddr
+    h, _, err := net.SplitHostPort(host)
+    if err == nil {
+        host = h
+    }
 
-	if r.Header.Get("X-Admin-Bot") != "1" && !isLocalhost(host) {
-		http.Error(w, "Forbidden: This endpoint is only for the admin bot", http.StatusForbidden)
-		log.Printf("Unauthorized bot-init access attempt from: %s", host)
-		return
-	}
+    if r.Header.Get("X-Admin-Bot") != "1" && !isLocalhost(host) {
+        http.Error(w, "Forbidden: This endpoint is only for the admin bot", http.StatusForbidden)
+        log.Printf("Unauthorized bot-init access attempt from: %s", r.RemoteAddr)
+        return
+    }
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"secret": ADMIN_SECRET,
-	})
-	log.Printf("Admin bot initialized from %s", host)
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]string{"secret": ADMIN_SECRET})
 }
 
 func isLocalhost(addr string) bool {
@@ -328,7 +348,7 @@ const indexHTML = `<!doctype html>
   window.addEventListener('DOMContentLoaded', function() {
     const isAdmin = window.location.search.includes('admin_bot=true');
     if (isAdmin) {
-      fetch('/bot-init', { headers: { 'X-Admin-Bot': '1' } })
+      fetch('./bot-init', { headers: { 'X-Admin-Bot': '1' } })
         .then(r => r.json())
         .then(data => {
           localStorage.setItem('admin_secret', data.secret);
@@ -360,18 +380,30 @@ const indexHTML = `<!doctype html>
     <div class="board">
       <div>
         <div class="card">
-          <form method="post" action="/post">
-            <label for="username">Your name</label>
-            <input id="username" name="username" placeholder="Your name" required>
+          <form method="post" action="./post">
 
-            <label for="content" style="margin-top:12px">Share your thoughts</label>
-            <textarea id="content" name="content" placeholder="Share your thoughts..." required></textarea>
+			<!-- where to redirect back after POST -->
+			<input type="hidden" name="next" id="next">
 
-            <div class="controls">
-              <button class="btn btn-primary" type="submit">Post Comment</button>
-              <button class="btn btn-ghost" type="reset">Reset</button>
-            </div>
-          </form>
+			<script>
+				// zapamiętaj dokładny path + query instancji (z tokenem)
+				document.addEventListener("DOMContentLoaded", () => {
+				const el = document.getElementById("next");
+				if (el) el.value = window.location.pathname + window.location.search;
+				});
+			</script>
+
+			<label for="username">Your name</label>
+			<input id="username" name="username" placeholder="Your name" required>
+
+			<label for="content" style="margin-top:12px">Share your thoughts</label>
+			<textarea id="content" name="content" placeholder="Share your thoughts..." required></textarea>
+
+			<div class="controls">
+				<button class="btn btn-primary" type="submit">Post Comment</button>
+				<button class="btn btn-ghost" type="reset">Reset</button>
+			</div>
+		   </form>
         </div>
 
         <h2 style="margin-top:18px">Recent Comments</h2>
@@ -390,13 +422,13 @@ const indexHTML = `<!doctype html>
           <h3 style="margin-top:0">About this CTF</h3>
           <p style="color:var(--muted); margin-bottom:0.6rem">This application intentionally exposes a stored XSS vulnerability for two-step exploitation.</p>
           <hr style="border:none; height:1px; background:rgba(255,255,255,0.02); margin:12px 0">
-          <p style="font-size:0.9rem; color:var(--muted)">Tip: Use the admin bot flow by visiting <code>/ ?admin_bot=true</code> to populate localStorage in a demo admin browser.</p>
+          <p style="font-size:0.9rem; color:var(--muted)">Tip: Use the admin bot flow by visiting <code>?admin_bot=true</code> to populate localStorage in a demo admin browser.</p>
         </div>
       </aside>
     </div>
 
     <footer>
-      <p class="admin-note">Admin panel: <a href="/admin" style="color:var(--accent); text-decoration:none">/admin</a> (requires secret parameter)</p>
+      <p class="admin-note">Admin panel: <a href="admin" style="color:var(--accent); text-decoration:none">/admin</a> (requires secret parameter)</p>
     </footer>
   </div>
 </body>
@@ -471,7 +503,7 @@ const adminHTML = `<!doctype html>
       </aside>
     </div>
 
-    <p><a class="back" href="/">← Back to comments board</a></p>
+    <p><a class="back" href="../">← Back to comments board</a></p>
   </div>
 </body>
 </html>`

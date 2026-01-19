@@ -1,0 +1,31 @@
+# 1. Create the namespace for challenges
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ctf-challenges
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: challenge-manager-role
+  namespace: ctf-challenges
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "endpoints"]
+  verbs: ["get", "list", "watch", "create", "delete"]
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: challenge-manager-binding
+  namespace: ctf-challenges
+subjects:
+- kind: ServiceAccount
+  name: backend-sa
+  namespace: default
+roleRef:
+  kind: Role
+  name: challenge-manager-role
+  apiGroup: rbac.authorization.k8s.io

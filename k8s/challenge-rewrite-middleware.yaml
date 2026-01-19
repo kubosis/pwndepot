@@ -1,0 +1,9 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: challenge-strip-prefix  # Keep the name same to avoid updating ingress
+  namespace: default
+spec:
+  replacePathRegex:
+    regex: "^/challenge/(.*)"
+    replacement: "/api/v1/challenges/$1"
