@@ -1,5 +1,6 @@
 # python
 import asyncio
+import contextlib
 import secrets
 import string
 from threading import Lock
@@ -290,7 +291,7 @@ class K8sTeamChallengeManager:
                         client.V1ServicePort(
                             port=port,
                             target_port=port,
-                            node_port=None,  # <<< K8s reserves a port automatically
+                            node_port=None,
                         )
                     ],
                     type="NodePort",
@@ -337,6 +338,22 @@ class K8sTeamChallengeManager:
             }
 
         except ApiException as e:
+            if e.status == 409:  # Conflict (Already Exists)
+                logger.warning(f"Zombie instance detected for {name}. Cleaning up and retrying...")
+                # Best-effort delete of both Service and Pod
+                try:
+                    self.core_v1.delete_namespaced_service(name=name, namespace=self.namespace)
+                except ApiException:
+                    contextlib.suppress(ApiException)
+                try:
+                    self.core_v1.delete_namespaced_pod(name=name, namespace=self.namespace)
+                except ApiException:
+                    contextlib.suppress(ApiException)
+                # Wait briefly for K8s to register the deletion
+                await asyncio.sleep(3)
+                # Retry the spawn
+                return await self.spawn_instance(team_id, challenge_id, image, port, ttl_seconds, protocol)
+
             logger.error(f"K8s API Error: {e}")
             return None
 
