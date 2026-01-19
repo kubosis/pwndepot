@@ -1,4 +1,6 @@
 name: hidden_network_treasure
-difficulty: medium
+difficulty: Medium
+category: Web
 points: 250
 author: Bertalan Tóth
+description: You are given a network capture (PCAP). A secret flag is hidden inside a packet payload. Extract the hidden data and decode it to obtain the flag.

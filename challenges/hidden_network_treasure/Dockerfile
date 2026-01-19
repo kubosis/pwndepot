@@ -2,21 +2,20 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Telepítés
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-      tshark xxd coreutils bash && \
+      wireshark-common tshark xxd coreutils bash ca-certificates python3 && \
     rm -rf /var/lib/apt/lists/*
 
-# Munka könyvtár
 WORKDIR /challenges/hidden_network_treasure
 
-# Másoljuk be a scriptet
 COPY generate_pcap.sh /usr/local/bin/generate_pcap.sh
+COPY start.sh /usr/local/bin/start.sh
 
-# Futtathatóvá tesszük
-RUN chmod +x /usr/local/bin/generate_pcap.sh
+RUN sed -i 's/\r$//' /usr/local/bin/generate_pcap.sh /usr/local/bin/start.sh && \
+    chmod +x /usr/local/bin/generate_pcap.sh /usr/local/bin/start.sh
 
-# Indításkor fusson a script, majd tartsa életben a konténert
-CMD ["/bin/bash", "-c", "/usr/local/bin/generate_pcap.sh && sleep infinity"]
+EXPOSE 8000
 
+# The platform should set CTF_FLAG dynamically per instance/team.
+CMD ["/bin/bash", "-lc", "/usr/local/bin/start.sh"]
