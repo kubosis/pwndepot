@@ -43,15 +43,19 @@ INDEX_HTML = """
       <h1>Hidden Key Cookie Forge</h1>
       <p class="lead">A Web based CTF challenge — find the secret hidden in the image to craft a valid session cookie.</p>
       <div class="img-wrap">
-        <img class="logo" src="/static/logo.png" alt="Downloadable image">
+        <img class="logo" src="static/logo.png" alt="Downloadable image">
       </div>
       <div class="download">
-        <a class="btn" href="/static/logo.png" download>Download the image</a>
+        <a class="btn" href="static/logo.png" download>Download the image</a>
       </div>
 
       <div class="instructions">
         <strong>How to approach (high level):</strong>
         <ol>
+          <li>
+            Hint: The image is already served by this challenge.
+            Try accessing <code>static/logo.png</code> relative to this page.
+          </li>
           <li>Download the image and inspect its metadata (hint: PNG text chunk).</li>
           <li>Compute an HMAC-SHA256 signature of the username <code>admin</code> using the secret you found.</li>
           <li>Set a cookie <code>session=admin|&lt;signature&gt;</code> and open <code>/flag</code>.</li>
