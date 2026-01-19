@@ -25,3 +25,4 @@ app/frontend/src/components/Teams.jsx:jwt:230
 app/frontend/src/components/Login.jsx:jwt:225
 app/frontend/src/App.jsx:jwt:101
 app/frontend/src/components/Register.jsx:jwt:162
+app/frontend/src/components/TeamPage.jsx:jwt:622

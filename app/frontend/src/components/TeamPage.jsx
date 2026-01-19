@@ -25,7 +25,6 @@ export default function TeamPage() {
   const [notFound, setNotFound] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [cursor, setCursor] = useState({ x: 0, y: 0 });
-  
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
@@ -50,21 +49,35 @@ export default function TeamPage() {
     return () => document.body.classList.remove("modal-open");
   }, [showModal]);
 
+  const isLoggedIn = !!currentUser;
+
   const isCaptain = useMemo(() => {
     if (!team || !currentUser) return false;
     return team.captain_user_id === currentUser.id;
   }, [team, currentUser]);
 
+  // Is the logged-in user actually a member of this team (from URL)?
+  const isMemberOfThisTeam = useMemo(() => {
+    if (!team || !currentUser) return false;
+    return team.users?.some((u) => u.username === currentUser.username);
+  }, [team, currentUser]);
+
   const loadTeam = async () => {
     try {
+      // Team endpoint is public
       const res = await api.get(`/teams/by-name/${teamName}`);
       const data = res.data;
 
-      const me = await api.get("/users/me");
-      setCurrentUser(me.data);
-
       setTeam(data);
       setNotFound(false);
+
+      // /users/me is optional: if 401 -> treat as guest
+      try {
+        const me = await api.get("/users/me");
+        setCurrentUser(me.data);
+      } catch {
+        setCurrentUser(null);
+      }
 
       // Pie aggregation
       const categoryMap = {};
@@ -254,12 +267,15 @@ export default function TeamPage() {
               members: <strong>{team.users?.length ?? 0}</strong>
             </span>
             <span className="scoreboard-pill">
-              role: <strong>{isCaptain ? "captain" : "member"}</strong>
+              role:{" "}
+              <strong>
+                {!isLoggedIn ? "guest" : isCaptain ? "captain" : isMemberOfThisTeam ? "member" : "viewer"}
+              </strong>
             </span>
           </div>
         </header>
 
-        {/* BIG CHART CARD (bigger than before) */}
+        {/* BIG CHART CARD */}
         <section className="scoreboard-card">
           <div className="scoreboard-card-head">
             <div>
@@ -279,7 +295,7 @@ export default function TeamPage() {
                 </div>
               </div>
             ) : (
-            <div
+              <div
                 className="team-chart-canvas"
                 onMouseMove={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
@@ -289,78 +305,78 @@ export default function TeamPage() {
                   });
                 }}
               >
-              <ResponsiveContainer width="100%" height={360}>
-                <PieChart>
-                  <Tooltip
-                    cursor={false}
-                    content={({ active, payload }) => {
-                      if (!active || !payload?.length) return null;
-                      const p = payload[0];
+                <ResponsiveContainer width="100%" height={360}>
+                  <PieChart>
+                    <Tooltip
+                      cursor={false}
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        const p = payload[0];
 
-                      return (
-                        <div
-                          className="team-tooltip"
-                          style={{
-                            left: cursor.x + 14,
-                            top: cursor.y + 14,
-                          }}
-                        >
-                          <div className="team-tooltip-title">
-                            <span
-                              className="team-tooltip-swatch"
-                              style={{ background: p.payload.color }}
-                            />
-                            {p.name}
+                        return (
+                          <div
+                            className="team-tooltip"
+                            style={{
+                              left: cursor.x + 14,
+                              top: cursor.y + 14,
+                            }}
+                          >
+                            <div className="team-tooltip-title">
+                              <span
+                                className="team-tooltip-swatch"
+                                style={{ background: p.payload.color }}
+                              />
+                              {p.name}
+                            </div>
+                            <div className="team-tooltip-body">
+                              solved: <strong>{p.value}</strong>
+                            </div>
                           </div>
-                          <div className="team-tooltip-body">
-                            solved: <strong>{p.value}</strong>
-                          </div>
-                        </div>
-                      );
-                    }}
-                  />
-                  <Pie
-                    data={chartData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={92}
-                    outerRadius={128}
-                    paddingAngle={2}
-                    stroke="rgba(255,255,255,0.16)"
-                    strokeWidth={1}
-                    isAnimationActive={true}
-                  >
-                    {chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
+                        );
+                      }}
+                    />
+                    <Pie
+                      data={chartData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={92}
+                      outerRadius={128}
+                      paddingAngle={2}
+                      stroke="rgba(255,255,255,0.16)"
+                      strokeWidth={1}
+                      isAnimationActive={true}
+                    >
+                      {chartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
 
-                  <text
-                    x="50%"
-                    y="50%"
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    fill="rgba(235,255,245,0.92)"
-                    style={{ fontWeight: 900, fontSize: 18 }}
-                  >
-                    {chartData.reduce((s, x) => s + (x.value || 0), 0)}
-                  </text>
-                  <text
-                    x="50%"
-                    y="50%"
-                    dy={22}
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    fill="rgba(200,255,235,0.62)"
-                    style={{ fontWeight: 800, fontSize: 11, letterSpacing: "0.12em" }}
-                  >
-                    TOTAL SOLVES
-                  </text>
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+                    <text
+                      x="50%"
+                      y="50%"
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fill="rgba(235,255,245,0.92)"
+                      style={{ fontWeight: 900, fontSize: 18 }}
+                    >
+                      {chartData.reduce((s, x) => s + (x.value || 0), 0)}
+                    </text>
+                    <text
+                      x="50%"
+                      y="50%"
+                      dy={22}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fill="rgba(200,255,235,0.62)"
+                      style={{ fontWeight: 800, fontSize: 11, letterSpacing: "0.12em" }}
+                    >
+                      TOTAL SOLVES
+                    </text>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
             )}
 
             {chartData.length > 0 && (
@@ -378,8 +394,9 @@ export default function TeamPage() {
               </div>
             )}
           </div>
-
         </section>
+
+        {/* TEAM MEMBERS */}
         <section className="scoreboard-card scoreboard-card-table">
           <div className="scoreboard-card-head">
             <div>
@@ -413,35 +430,56 @@ export default function TeamPage() {
           </div>
         </section>
 
-        <section className="scoreboard-card team-actions-card">
-          <div className="scoreboard-card-head">
-            <div>
-              <div className="scoreboard-card-title">Actions</div>
-              <div className="scoreboard-card-meta">leave / navigation / captain tools</div>
+        {/* ACTIONS */}
+        {isLoggedIn ? (
+          <section className="scoreboard-card team-actions-card">
+            <div className="scoreboard-card-head">
+              <div>
+                <div className="scoreboard-card-title">Actions</div>
+                <div className="scoreboard-card-meta">leave / navigation / captain tools</div>
+              </div>
+              <div className="scoreboard-badge">ops</div>
             </div>
-            <div className="scoreboard-badge">ops</div>
-          </div>
 
-          <div className="team-actions-row team-actions-row--center">
-            <button type="button" className="team-btn team-btn-danger" onClick={openLeaveModal}>
-              Leave Team
-            </button>
+            <div className="team-actions-row team-actions-row--center">
+              {isMemberOfThisTeam && (
+                <button type="button" className="team-btn team-btn-danger" onClick={openLeaveModal}>
+                  Leave Team
+                </button>
+              )}
 
-            <Link to="/Rankings" className="team-btn team-btn-ghost">
-              Back to Scoreboard
-            </Link>
-
-            {isCaptain && (
-              <Link to={`/captain-panel/${team.team_name}`} className="team-btn">
-                Captain Panel
+              <Link to="/Rankings" className="team-btn team-btn-ghost">
+                Back to Scoreboard
               </Link>
-            )}
-          </div>
-        </section>
+
+              {isCaptain && (
+                <Link to={`/captain-panel/${team.team_name}`} className="team-btn">
+                  Captain Panel
+                </Link>
+              )}
+            </div>
+          </section>
+        ) : (
+          <section className="scoreboard-card team-actions-card">
+            <div className="scoreboard-card-head">
+              <div>
+                <div className="scoreboard-card-title">Actions</div>
+                <div className="scoreboard-card-meta">view-only mode</div>
+              </div>
+              <div className="scoreboard-badge">guest</div>
+            </div>
+
+            <div className="team-actions-row team-actions-row--center">
+              <Link to="/Rankings" className="team-btn team-btn-ghost">
+                Back to Scoreboard
+              </Link>
+            </div>
+          </section>
+        )}
       </div>
 
-      {/* MODAL */}
-      {showModal && (
+      {/* MODAL (only when logged in + user is a member) */}
+      {isLoggedIn && isMemberOfThisTeam && showModal && (
         <div className="team-modal-overlay" role="dialog" aria-modal="true">
           <div className="team-modal">
             <div className="team-modal-head">
@@ -499,10 +537,7 @@ export default function TeamPage() {
                     </div>
                   </label>
 
-                  <Feedback
-                    type={modalError ? "error" : "success"}
-                    className="team-modal-feedback"
-                  >
+                  <Feedback type={modalError ? "error" : "success"} className="team-modal-feedback">
                     {modalMessage}
                   </Feedback>
                 </>
@@ -534,10 +569,7 @@ export default function TeamPage() {
                     </select>
                   </label>
 
-                  <Feedback
-                    type={modalError ? "error" : "warn"}
-                    className="team-modal-feedback"
-                  >
+                  <Feedback type={modalError ? "error" : "warn"} className="team-modal-feedback">
                     {modalMessage}
                   </Feedback>
                 </>
@@ -547,10 +579,7 @@ export default function TeamPage() {
                 <>
                   <p className="team-modal-text">Are you sure you want to leave this team?</p>
 
-                  <Feedback
-                    type={modalError ? "error" : "warn"}
-                    className="team-modal-feedback"
-                  >
+                  <Feedback type={modalError ? "error" : "warn"} className="team-modal-feedback">
                     {modalMessage}
                   </Feedback>
                 </>
@@ -559,27 +588,21 @@ export default function TeamPage() {
 
             <div className="team-modal-actions">
               {modalType === "captain_alone" && (
-                <>
-                  <button className="team-btn team-btn-danger" onClick={deleteTeamNow}>
-                    Delete Team
-                  </button>
-                </>
+                <button className="team-btn team-btn-danger" onClick={deleteTeamNow}>
+                  Delete Team
+                </button>
               )}
 
               {modalType === "captain_transfer" && (
-                <>
-                  <button className="team-btn" onClick={transferCaptainAndLeave}>
-                    Transfer & Leave
-                  </button>
-                </>
+                <button className="team-btn" onClick={transferCaptainAndLeave}>
+                  Transfer & Leave
+                </button>
               )}
 
               {modalType === "member_leave" && (
-                <>
-                  <button className="team-btn team-btn-danger" onClick={leaveTeamNow}>
-                    Leave
-                  </button>
-                </>
+                <button className="team-btn team-btn-danger" onClick={leaveTeamNow}>
+                  Leave
+                </button>
               )}
             </div>
           </div>
@@ -595,7 +618,8 @@ function TeamBg() {
       <div
         className="absolute inset-0 opacity-55"
         style={{
-          backgroundImage: "url('https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/746d5571-d784-4094-a24d-a3bdbc7e1013/dfoij5k-96c3f665-b433-47ad-a2e0-51c5b50bde53.png/v1/fill/w_1280,h_720,q_80,strp/matrix_code_in_blue_by_wuksoy_dfoij5k-fullview.jpg?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOjdlMGQxODg5ODIyNjQzNzNhNWYwZDQxNWVhMGQyNmUwIiwiaXNzIjoidXJuOmFwcDo3ZTBkMTg4OTgyMjY0MzczYTVmMGQ0MTVlYTBkMjZlMCIsIm9iaiI6W1t7ImhlaWdodCI6Ijw9NzIwIiwicGF0aCI6Ii9mLzc0NmQ1NTcxLWQ3ODQtNDA5NC1hMjRkLWEzYmRiYzdlMTAxMy9kZm9pajVrLTk2YzNmNjY1LWI0MzMtNDdhZC1hMmUwLTUxYzViNTBiZGU1My5wbmciLCJ3aWR0aCI6Ijw9MTI4MCJ9XV0sImF1ZCI6WyJ1cm46c2VydmljZTppbWFnZS5vcGVyYXRpb25zIl19.ZEMLeYecpAeo-6CQlDfebfl-R_581TIy3en7K9UzfyU')",
+          backgroundImage:
+            "url('https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/746d5571-d784-4094-a24d-a3bdbc7e1013/dfoij5k-96c3f665-b433-47ad-a2e0-51c5b50bde53.png/v1/fill/w_1280,h_720,q_80,strp/matrix_code_in_blue_by_wuksoy_dfoij5k-fullview.jpg?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOjdlMGQxODg5ODIyNjQzNzNhNWYwZDQxNWVhMGQyNmUwIiwiaXNzIjoidXJuOmFwcDo3ZTBkMTg4OTgyMjY0MzczYTVmMGQ0MTVlYTBkMjZlMCIsIm9iaiI6W1t7ImhlaWdodCI6Ijw9NzIwIiwicGF0aCI6Ii9mLzc0NmQ1NTcxLWQ3ODQtNDA5NC1hMjRkLWEzYmRiYzdlMTAxMy9kZm9pajVrLTk2YzNmNjY1LWI0MzMtNDdhZC1hMmUwLTUxYzViNTBiZGU1My5wbmciLCJ3aWR0aCI6Ijw9MTI4MCJ9XV0sImF1ZCI6WyJ1cm46c2VydmljZTppbWFnZS5vcGVyYXRpb25zIl19.ZEMLeYecpAeo-6CQlDfebfl-R_581TIy3en7K9UzfyU')",
           backgroundSize: "cover",
           backgroundRepeat: "no-repeat",
           backgroundPosition: "center",
