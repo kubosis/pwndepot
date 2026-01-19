@@ -3,7 +3,7 @@ import os, json, pathlib
 
 app = Flask(__name__)
 
-# pub.json est 1 dossier au-dessus de /server
+# pub.json est un dossier au-dessus de /server
 pub_path = pathlib.Path(__file__).parent.parent / "pub.json"
 with open(pub_path, "r", encoding="utf-8") as f:
     pub = json.load(f)
@@ -12,13 +12,8 @@ N = int(pub["n"])
 E = int(pub["e"])
 
 
-def rsa_encrypt(msg: bytes, n: int, e: int) -> int:
-    m = int.from_bytes(msg, "big")
-    if m >= n:
-        max_len = max(1, (n.bit_length() // 8) - 1)
-        msg = msg[:max_len]
-        m = int.from_bytes(msg, "big")
-    return pow(m, e, n)
+def bytes_to_int(b: bytes) -> int:
+    return int.from_bytes(b, "big")
 
 
 @app.get("/pub")
@@ -28,8 +23,17 @@ def get_pub():
 
 @app.get("/cipher")
 def get_cipher():
-    flag = os.environ.get("FLAG", "FLAG{local_test}")
-    c = rsa_encrypt(flag.encode("utf-8"), N, E)
+    # Backend injecte CTF_FLAG. En local tu peux utiliser FLAG.
+    flag = os.getenv("CTF_FLAG") or os.getenv("FLAG") or "FLAG{local_test}"
+
+    msg = flag.encode("utf-8")
+    m = bytes_to_int(msg)
+
+    # IMPORTANT: pas de troncature (sinon deux flags peuvent donner le même cipher)
+    if m >= N:
+        return jsonify({"error": "FLAG too long for this modulus"}), 500
+
+    c = pow(m, E, N)
     return jsonify({"cipher": str(c)})
 
 
