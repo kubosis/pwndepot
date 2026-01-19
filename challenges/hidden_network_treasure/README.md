@@ -1,11 +1,21 @@
 # Hidden Network Treasure (Medium)
 
-You are given a network capture file `network_capture.pcap`. A secret flag is hidden inside the packet payload.
-Your task:
-1. Analyze the pcap (Wireshark / tshark).
-2. Find and extract the hidden payload (it contains a Base64 string).
-3. Decode the Base64 to obtain the flag in `flag{...}` format.
+## What the player sees
+The challenge runs as a web instance. The page offers a downloadable PCAP:
+- `GET /network_capture.pcap`
 
-Hints:
-- Check Packet Bytes or use "Follow TCP Stream".
-- The flag is encoded (Base64) within one payload.
+## Goal
+1. Download `network_capture.pcap`.
+2. Open it in Wireshark / analyze with tshark.
+3. Extract the hidden payload (it is a Base64 string inside packet bytes).
+4. Decode the Base64 to obtain the flag in `flag{...}` format.
+
+## Notes for the platform/admin
+- The PCAP is generated **at container startup**.
+- The flag must be provided via environment variable: `CTF_FLAG`.
+- The container serves the file over HTTP on port **8000**.
+
+## Player hints
+- Check *Packet Bytes* in Wireshark.
+- Try "Follow TCP Stream" (or inspect the payload bytes directly).
+- The hidden data is Base64; decoding reveals the flag.
