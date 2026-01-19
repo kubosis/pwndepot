@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.backend.api.v1.deps import (
     AsyncSessionDep,
+    ChallengesRepositoryDep,
     CurrentAdminDep,
     CurrentUserDep,
     RequireAdminNonRecovery,
@@ -46,6 +47,7 @@ from app.backend.schema.users import (
     UserInCreate,
     UserInResponse,
     UserInUpdate,
+    UserSolveEntry,
     UserStatusUpdate,
 )
 from app.backend.security.exceptions import (
@@ -880,7 +882,8 @@ async def delete_user(
     if current_admin.mfa_enabled:
         await consume_admin_mfa(current_admin.id)
     return {"message": f"User {user_id} deleted successfully"}
-    
+
+
 @router.get("/me/solved", status_code=200)
 async def get_my_solved_ids(
     current_user: CurrentUserDep,
@@ -888,6 +891,7 @@ async def get_my_solved_ids(
 ):
     ids = await challenge_repo.get_user_solved_ids(current_user.id)
     return {"solved_ids": ids}
+
 
 # -----------------------------
 # LOGOUT — CLEAR COOKIE
@@ -918,6 +922,7 @@ async def logout_force(request: Request, response: Response):
     clear_auth_cookies(response)
     return {"message": "Logged out"}
 
+
 @router.get("/profile/{username}/solves", response_model=list[UserSolveEntry])
 @limiter.limit("30/minute")
 async def get_user_solves(
@@ -945,4 +950,3 @@ async def get_user_solves(
         )
 
     return out
-
