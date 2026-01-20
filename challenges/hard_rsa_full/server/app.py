@@ -3,7 +3,14 @@ import os, json, pathlib
 
 app = Flask(__name__)
 
-# pub.json est un dossier au-dessus de /server
+
+@app.get("/")
+def index():
+    # Landing endpoint for the platform: provides relative endpoints (token-friendly)
+    return jsonify({"name": "hard_rsa_full", "endpoints": ["pub", "cipher"]})
+
+
+# pub.json is one directory above /server
 pub_path = pathlib.Path(__file__).parent.parent / "pub.json"
 with open(pub_path, "r", encoding="utf-8") as f:
     pub = json.load(f)
@@ -23,13 +30,12 @@ def get_pub():
 
 @app.get("/cipher")
 def get_cipher():
-    # Backend injecte CTF_FLAG. En local tu peux utiliser FLAG.
+    # Backend injects CTF_FLAG. Locally you can use FLAG.
     flag = os.getenv("CTF_FLAG") or os.getenv("FLAG") or "FLAG{local_test}"
 
-    msg = flag.encode("utf-8")
-    m = bytes_to_int(msg)
+    m = bytes_to_int(flag.encode("utf-8"))
 
-    # IMPORTANT: pas de troncature (sinon deux flags peuvent donner le même cipher)
+    
     if m >= N:
         return jsonify({"error": "FLAG too long for this modulus"}), 500
 
