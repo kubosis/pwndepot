@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api } from "../config/api";
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from "recharts";
+import { createPortal } from "react-dom";
 import "../index.css";
 
 function Feedback({ type = "warn", children, className = "" }) {
@@ -44,9 +45,20 @@ export default function TeamPage() {
   }, [teamName]);
 
   useEffect(() => {
-    if (showModal) document.body.classList.add("modal-open");
-    else document.body.classList.remove("modal-open");
-    return () => document.body.classList.remove("modal-open");
+    if (!showModal) return;
+
+    const prevOverflow = document.body.style.overflow;
+    const prevPaddingRight = document.body.style.paddingRight;
+
+    const scrollbarW = window.innerWidth - document.documentElement.clientWidth;
+
+    document.body.style.overflow = "hidden";
+    if (scrollbarW > 0) document.body.style.paddingRight = `${scrollbarW}px`;
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.paddingRight = prevPaddingRight;
+    };
   }, [showModal]);
 
   const isLoggedIn = !!currentUser;
@@ -479,135 +491,138 @@ export default function TeamPage() {
       </div>
 
       {/* MODAL (only when logged in + user is a member) */}
-      {isLoggedIn && isMemberOfThisTeam && showModal && (
-        <div className="team-modal-overlay" role="dialog" aria-modal="true">
-          <div className="team-modal">
-            <div className="team-modal-head">
-              <div>
-                <div className="team-modal-title">
-                  {modalType === "captain_alone"
-                    ? "Delete Team?"
-                    : modalType === "captain_transfer"
-                    ? "Transfer Captain Role"
-                    : "Leave Team?"}
+      {isLoggedIn && isMemberOfThisTeam && showModal && 
+        createPortal(
+          <div className="team-modal-overlay" role="dialog" aria-modal="true">
+            <div className="team-modal">
+              <div className="team-modal-head">
+                <div>
+                  <div className="team-modal-title">
+                    {modalType === "captain_alone"
+                      ? "Delete Team?"
+                      : modalType === "captain_transfer"
+                      ? "Transfer Captain Role"
+                      : "Leave Team?"}
+                  </div>
+                  <div className="team-modal-meta">
+                    {modalType === "captain_alone"
+                      ? "danger zone • permanent action"
+                      : modalType === "captain_transfer"
+                      ? "handoff required • then leave"
+                      : "confirm action"}
+                  </div>
                 </div>
-                <div className="team-modal-meta">
-                  {modalType === "captain_alone"
-                    ? "danger zone • permanent action"
-                    : modalType === "captain_transfer"
-                    ? "handoff required • then leave"
-                    : "confirm action"}
-                </div>
+
+                <button className="team-icon-btn" onClick={closeModal} aria-label="Close">
+                  ✕
+                </button>
               </div>
 
-              <button className="team-icon-btn" onClick={closeModal} aria-label="Close">
-                ✕
-              </button>
-            </div>
+              <div className="team-modal-body">
+                {modalType === "captain_alone" && (
+                  <>
+                    <p className="team-modal-text">
+                      You are the only member. Leaving will <strong>DELETE the team permanently</strong>.
+                    </p>
 
-            <div className="team-modal-body">
-              {modalType === "captain_alone" && (
-                <>
-                  <p className="team-modal-text">
-                    You are the only member. Leaving will <strong>DELETE the team permanently</strong>.
-                  </p>
+                    <label className="team-modal-field">
+                      <div className="team-modal-label">
+                        <span>Team password</span>
+                        <span className="team-modal-hint">min 8 characters</span>
+                      </div>
 
-                  <label className="team-modal-field">
-                    <div className="team-modal-label">
-                      <span>Team password</span>
-                      <span className="team-modal-hint">min 8 characters</span>
-                    </div>
+                      <div className="admin-input-wrap">
+                        <input
+                          type={showTeamDeletePass ? "text" : "password"}
+                          className="team-input mono admin-input has-toggle"
+                          placeholder="Enter team password"
+                          value={teamPasswordForDelete}
+                          onChange={(e) => setTeamPasswordForDelete(e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          className="admin-toggle"
+                          onClick={() => setShowTeamDeletePass((v) => !v)}
+                          aria-label={showTeamDeletePass ? "Hide password" : "Show password"}
+                        >
+                          {showTeamDeletePass ? "Hide" : "Show"}
+                        </button>
+                      </div>
+                    </label>
 
-                    <div className="admin-input-wrap">
-                      <input
-                        type={showTeamDeletePass ? "text" : "password"}
-                        className="team-input mono admin-input has-toggle"
-                        placeholder="Enter team password"
-                        value={teamPasswordForDelete}
-                        onChange={(e) => setTeamPasswordForDelete(e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        className="admin-toggle"
-                        onClick={() => setShowTeamDeletePass((v) => !v)}
-                        aria-label={showTeamDeletePass ? "Hide password" : "Show password"}
+                    <Feedback type={modalError ? "error" : "success"} className="team-modal-feedback">
+                      {modalMessage}
+                    </Feedback>
+                  </>
+                )}
+
+                {modalType === "captain_transfer" && (
+                  <>
+                    <p className="team-modal-text">Select a new captain before leaving this team.</p>
+
+                    <label className="team-modal-field">
+                      <div className="team-modal-label">
+                        <span>New captain</span>
+                        <span className="team-modal-hint">required</span>
+                      </div>
+
+                      <select
+                        className="team-input"
+                        value={selectedNewCaptain || ""}
+                        onChange={(e) => setSelectedNewCaptain(e.target.value)}
                       >
-                        {showTeamDeletePass ? "Hide" : "Show"}
-                      </button>
-                    </div>
-                  </label>
+                        <option value="">Select a user</option>
+                        {team.users
+                          .filter((u) => u.username !== currentUser?.username)
+                          .map((u) => (
+                            <option key={u.username} value={u.username}>
+                              {u.username}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
 
-                  <Feedback type={modalError ? "error" : "success"} className="team-modal-feedback">
-                    {modalMessage}
-                  </Feedback>
-                </>
-              )}
+                    <Feedback type={modalError ? "error" : "warn"} className="team-modal-feedback">
+                      {modalMessage}
+                    </Feedback>
+                  </>
+                )}
 
-              {modalType === "captain_transfer" && (
-                <>
-                  <p className="team-modal-text">Select a new captain before leaving this team.</p>
+                {modalType === "member_leave" && (
+                  <>
+                    <p className="team-modal-text">Are you sure you want to leave this team?</p>
 
-                  <label className="team-modal-field">
-                    <div className="team-modal-label">
-                      <span>New captain</span>
-                      <span className="team-modal-hint">required</span>
-                    </div>
+                    <Feedback type={modalError ? "error" : "warn"} className="team-modal-feedback">
+                      {modalMessage}
+                    </Feedback>
+                  </>
+                )}
+              </div>
 
-                    <select
-                      className="team-input"
-                      value={selectedNewCaptain || ""}
-                      onChange={(e) => setSelectedNewCaptain(e.target.value)}
-                    >
-                      <option value="">Select a user</option>
-                      {team.users
-                        .filter((u) => u.username !== currentUser?.username)
-                        .map((u) => (
-                          <option key={u.username} value={u.username}>
-                            {u.username}
-                          </option>
-                        ))}
-                    </select>
-                  </label>
+              <div className="team-modal-actions">
+                {modalType === "captain_alone" && (
+                  <button className="team-btn team-btn-danger" onClick={deleteTeamNow}>
+                    Delete Team
+                  </button>
+                )}
 
-                  <Feedback type={modalError ? "error" : "warn"} className="team-modal-feedback">
-                    {modalMessage}
-                  </Feedback>
-                </>
-              )}
+                {modalType === "captain_transfer" && (
+                  <button className="team-btn" onClick={transferCaptainAndLeave}>
+                    Transfer & Leave
+                  </button>
+                )}
 
-              {modalType === "member_leave" && (
-                <>
-                  <p className="team-modal-text">Are you sure you want to leave this team?</p>
-
-                  <Feedback type={modalError ? "error" : "warn"} className="team-modal-feedback">
-                    {modalMessage}
-                  </Feedback>
-                </>
-              )}
+                {modalType === "member_leave" && (
+                  <button className="team-btn team-btn-danger" onClick={leaveTeamNow}>
+                    Leave
+                  </button>
+                )}
+              </div>
             </div>
-
-            <div className="team-modal-actions">
-              {modalType === "captain_alone" && (
-                <button className="team-btn team-btn-danger" onClick={deleteTeamNow}>
-                  Delete Team
-                </button>
-              )}
-
-              {modalType === "captain_transfer" && (
-                <button className="team-btn" onClick={transferCaptainAndLeave}>
-                  Transfer & Leave
-                </button>
-              )}
-
-              {modalType === "member_leave" && (
-                <button className="team-btn team-btn-danger" onClick={leaveTeamNow}>
-                  Leave
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+        document.body
+        )
+      }
     </section>
   );
 }

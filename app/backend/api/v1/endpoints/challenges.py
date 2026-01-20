@@ -775,6 +775,10 @@ async def submit_flag_team_once(
     if not team:
         raise HTTPException(status_code=400, detail="You must be in a team to submit a flag.")
 
+    team_id = int(team.id)
+    user_id = int(current_user.id)
+    username = str(getattr(current_user, "username", ""))
+
     flag_value = (submission.flag or "").strip()
     if not flag_value:
         raise HTTPException(status_code=400, detail="Flag cannot be empty.")
@@ -782,41 +786,41 @@ async def submit_flag_team_once(
     ch = await challenge_repo.read_challenge_by_id(challenge_id)
     if not ch:
         raise HTTPException(status_code=404, detail="Challenge not found")
-    # --- HOTFIX: copy scalars before any commit/rollback (prevents MissingGreenlet)
+
     ch_points = int(getattr(ch, "points", 0) or 0)
     ch_id = int(getattr(ch, "id", challenge_id))
 
     # Enforce: user can solve only once
-    if await challenge_repo.has_user_completed(current_user.id, challenge_id):
+    if await challenge_repo.has_user_completed(user_id, challenge_id):
         raise HTTPException(status_code=400, detail="Challenge already completed by you.")
 
-    # Validate team-scoped flag
-    valid = await challenge_repo.validate_flag_team(ch, flag_value, team_id=team.id)
+    valid = await challenge_repo.validate_flag_team(ch, flag_value, team_id=team_id)
     if not valid:
-        logger.info(f"Wrong flag submitted by user={current_user.username} team={team.id} challenge={challenge_id}")
+        logger.info(f"Wrong flag submitted by user={username} team={team_id} challenge={challenge_id}")
         raise HTTPException(status_code=400, detail="Incorrect flag")
 
-    # Record USER completion (must be protected by UNIQUE in DB)
-    completion = await challenge_repo.record_completion(current_user.id, challenge_id)
+    # Record USER completion
+    completion = await challenge_repo.record_completion(user_id, challenge_id)
     if not completion:
         raise HTTPException(status_code=400, detail="Challenge already completed by you.")
 
     # Record TEAM completion once
     team_awarded = await team_repo.record_team_completion(
-        team_id=team.id,
+        team_id=team_id,
         challenge_id=challenge_id,
-        completed_by_user_id=current_user.id,
+        completed_by_user_id=user_id,
     )
 
-    if team_awarded:
-        msg = f"Correct! +{ch_points} points (team awarded)"
-    else:
-        msg = "Correct! (team already credited for this challenge)"
+    msg = (
+        f"Correct! +{ch_points} points (team awarded)"
+        if team_awarded
+        else "Correct! (team already credited for this challenge)"
+    )
 
     return {
         "message": msg,
         "team_awarded": team_awarded,
         "points": ch_points,
-        "team_id": team.id,
+        "team_id": team_id,
         "challenge_id": ch_id,
     }

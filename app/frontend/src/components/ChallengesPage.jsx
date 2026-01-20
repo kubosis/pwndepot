@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../config/api";
 import { DEMO_MODE } from "../config/demo";
+import { createPortal } from "react-dom";
 
 /**
  * Fully featured Challenges page:
@@ -113,6 +114,10 @@ function ChallengeTile({ ch, solvedByMe, solvedByTeam, locked, onOpen }) {
   );
 }
 
+function ModalPortal({ children }) {
+  return createPortal(children, document.body);
+}
+
 function ChallengeModal({
   ch,
   onClose,
@@ -132,6 +137,14 @@ function ChallengeModal({
   const lastSubmitOkRef = useRef(false);
   const [canClose,] = useState(true);
 
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
   const handleClose = () => {
     onClose();  
   };
@@ -139,6 +152,15 @@ function ChallengeModal({
 
   // Instance state
   const [inst, setInst] = useState(null);
+  // Pending UX (max 15s after spawn click)
+  const [pending, setPending] = useState(false);
+  const pendingTimerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+    };
+  }, []);
   const [tick, setTick] = useState(0);
 
   // Web token/link state
@@ -165,10 +187,14 @@ function ChallengeModal({
       try {
         const res = await api.get(`/challenges/${ch.id}/instance`);
         if (stopped) return;
-        setInst(res.data || null);
+        const nextInst = res.data || null;
+        setInst(nextInst);
+        if (nextInst?.running) {
+          setPending(false);
+          if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+        }
       } catch (e) {
         if (stopped) return;
-        setInst(null);
         if (e?.response?.status === 401) {
           setMsg("Session expired. Please log in again.");
         } else {
@@ -202,6 +228,7 @@ function ChallengeModal({
    */
   async function ensureWebToken() {
     if (!canUseInstance) return;
+    if (pending) return;
     if (!inst?.running) return;
     if (webToken && webUrl) return;
 
@@ -220,7 +247,7 @@ function ChallengeModal({
   useEffect(() => {
     ensureWebToken();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inst?.running, inst?.expires_at, ch.id]);
+  }, [inst?.running, inst?.expires_at, ch.id, pending]);
 
   /**
    * Spawn (team scoped)
@@ -249,10 +276,20 @@ function ChallengeModal({
     setMsg("");
     setMsgKind("");
 
+    setPending(true);
+    if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+    pendingTimerRef.current = setTimeout(() => {
+      setPending(false);
+    }, 15000);
+
     try {
       const res = await api.post(`/challenges/${ch.id}/spawn2`, {});
       const payload = res.data?.instance || res.data || null;
       setInst(payload);
+      if (payload?.running) {
+        setPending(false);
+        if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+      }
       setMsgKind("success");
       setMsg(res.data?.message || "Instance started.");
       setWebToken(null);
@@ -265,6 +302,10 @@ function ChallengeModal({
         const data = e.response.data || {};
         const payload = data.instance || null;
         setInst(payload);
+        if (payload?.running) {
+          setPending(false);
+          if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+        }
         setMsgKind("warn");
         setMsg(data.message || "Instance already launched for your team.");
         setWebToken(null);
@@ -290,6 +331,8 @@ function ChallengeModal({
       setInst(null);
       setWebToken(null);
       setWebUrl(null);
+      setPending(false);
+      if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
       setMsgKind("success");
       setMsg("Instance terminated.");
     } catch (e) {
@@ -426,225 +469,236 @@ function ChallengeModal({
 
 
   return (
-    <div className="ctf-modal-overlay" onClick={handleClose}>
-      <div className="ctf-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="ctf-modal-head">
-          <div>
-            <div className="ctf-kicker">
-              <span className="auth-dot" />
-              CHALLENGE://{(ch.category || "Uncategorized").toUpperCase()}
+    <ModalPortal>
+      <div className="ctf-modal-overlay" onClick={handleClose}>
+        <div className="ctf-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="ctf-modal-head">
+            <div>
+              <div className="ctf-kicker">
+                <span className="auth-dot" />
+                CHALLENGE://{(ch.category || "Uncategorized").toUpperCase()}
+              </div>
+
+              <h2 className="ctf-title">{ch.name}</h2>
+
+              <div className="ctf-modal-meta">
+                <span>author: <b>{ch.author || "unknown"}</b></span>
+                <span className="ctf-modal-meta-sep">•</span>
+                <span>category: <b>{ch.category || "Uncategorized"}</b></span>
+              </div>
+
+              <div className="ctf-sub">
+                <span className="chip">{ch.points} pts</span>
+                <span className="chip">{ch.difficulty}</span>
+                {ch.is_download ? <span className="chip">download</span> : <span className="chip">instance</span>}
+                {solvedByMe && <span className="chip chip-ok">solved</span>}
+                {!solvedByMe && solvedByTeam && <span className="chip chip-warn">team solved</span>}
+              </div>
             </div>
 
-            <h2 className="ctf-title">{ch.name}</h2>
-
-            <div className="ctf-modal-meta">
-              <span>author: <b>{ch.author || "unknown"}</b></span>
-              <span className="ctf-modal-meta-sep">•</span>
-              <span>category: <b>{ch.category || "Uncategorized"}</b></span>
-            </div>
-
-            <div className="ctf-sub">
-              <span className="chip">{ch.points} pts</span>
-              <span className="chip">{ch.difficulty}</span>
-              {ch.is_download ? <span className="chip">download</span> : <span className="chip">instance</span>}
-              {solvedByMe && <span className="chip chip-ok">solved</span>}
-              {!solvedByMe && solvedByTeam && <span className="chip chip-warn">team solved</span>}
-            </div>
+            <button className="ctf-x" onClick={handleClose} aria-label="Close" type="button">
+              ✕
+            </button>
           </div>
 
-          <button className="ctf-x" onClick={handleClose} aria-label="Close" type="button">
-            ✕
-          </button>
-        </div>
-
-        <div className="ctf-attention">
-          <b>ATTENTION:</b> Instance is <b>per team</b>. Do not share connection details outside your team.
-        </div>
-
-        <div className="ctf-body">
-          <div className="ctf-block">
-            <div className="ctf-block-title">Description</div>
-            <div className="ctf-block-text">{ch.description || "—"}</div>
+          <div className="ctf-attention">
+            <b>ATTENTION:</b> Instance is <b>per team</b>. Do not share connection details outside your team.
           </div>
 
-          {ch.hint && (
+          <div className="ctf-body">
             <div className="ctf-block">
-              <div className="ctf-block-title">Hint</div>
-              <div className="ctf-block-text">{ch.hint}</div>
+              <div className="ctf-block-title">Description</div>
+              <div className="ctf-block-text">{ch.description || "—"}</div>
             </div>
-          )}
 
-          {ch.is_download && (
+            {ch.hint && (
+              <div className="ctf-block">
+                <div className="ctf-block-title">Hint</div>
+                <div className="ctf-block-text">{ch.hint}</div>
+              </div>
+            )}
+
+            {ch.is_download && (
+              <div className="ctf-block">
+                <div className="ctf-block-title">Download</div>
+                <a className="ctf-link" href={`/api/v1/challenges/${ch.id}/download`} target="_blank" rel="noreferrer">
+                  Download attachment
+                </a>
+              </div>
+            )}
+
+            {!ch.is_download && (
+              <div className="ctf-block">
+                <div className="ctf-block-title">Instance</div>
+
+                {!me || !team ? (
+                  <div className="auth-feedback error" style={{ marginTop: 8 }}>
+                    Login and join a team to start this challenge instance.
+                  </div>
+                ) : (
+                  <>
+                    {inst?.running ? (
+                      <div className="ctf-instance">
+                        <div className="ctf-row">
+                          <span className="label">Status</span>
+                          <span className="val ok">{inst.status || "running"}</span>
+                        </div>
+
+                        {inst.protocol === "http" && webUrl && (
+                          <div className="ctf-row">
+                            <span className="label">Web URL</span>
+                            <span className="val mono">
+                              <a className="ctf-link" href={webUrl} target="_blank" rel="noreferrer">
+                                {webUrl}
+                              </a>
+                            </span>
+                          </div>
+                        )}
+                        {inst.protocol === "tcp" && (
+                          <>
+                            {inst.tcp_host && (
+                              <div className="ctf-row">
+                                <span className="label">TCP Host</span>
+                                <span className="val mono">{inst.tcp_host}</span>
+                              </div>
+                            )}
+                            {inst.tcp_port && (
+                              <div className="ctf-row">
+                                <span className="label">TCP Port</span>
+                                <span className="val mono">{inst.tcp_port}</span>
+                              </div>
+                            )}
+                            {inst.passphrase && (
+                              <div className="ctf-row">
+                                <span className="label">Passphrase</span>
+                                <span className="val mono">{inst.passphrase}</span>
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        {remainingSeconds != null ? (
+                          <div className="ctf-row">
+                            <span className="label">TTL</span>
+                            <span className={`val mono ${remainingSeconds <= 15 * 60 ? "warn" : ""}`}>
+                              {remainingSeconds <= 0 ? "expired" : fmtTime(remainingSeconds)}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="ctf-row">
+                            <span className="label">TTL</span>
+                            <span className="val mono" style={{ opacity: 0.75 }}>
+                              unknown
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="ctf-actions">
+                          <button className="auth-submit" onClick={terminate} disabled={busy} type="button">
+                            Terminate
+                          </button>
+
+                          <button
+                            className="auth-submit"
+                            onClick={extend}
+                            disabled={busy || remainingSeconds == null || remainingSeconds <= 0}
+                            title={
+                              remainingSeconds == null
+                                ? "Extend requires instance status endpoint"
+                                : remainingSeconds > 15 * 60
+                                ? "Available when TTL <= 15:00"
+                                : "Extend to 60 minutes"
+                            }
+                            type="button"
+                          >
+                            Extend (60m)
+                          </button>
+                        </div>
+
+                        <div className="ctf-note">
+                          <b>TCP challenges:</b> service may ask for a handshake password. After 3 failed attempts the connection is dropped.
+                        </div>
+                      </div>
+                    ) : pending ? (
+                      <div className="ctf-instance">
+                        <div className="ctf-row">
+                          <span className="label">Status</span>
+                          <span className="val warn">pending...</span>
+                        </div>
+
+                        <div className="ctf-note">
+                          Instance is starting. Connection details will appear when status becomes <b>running</b>.
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="ctf-actions">
+                        <button className="auth-submit" onClick={spawn} disabled={busy || solvedByMe} type="button">
+                          {busy ? "Starting..." : "Start instance"}
+                        </button>
+
+                        {solvedByMe && (
+                          <div className="auth-feedback warn" style={{ marginTop: 10 }}>
+                            You already solved this challenge — instance start is disabled for you.
+                          </div>
+                        )}
+
+                        {!solvedByMe && solvedByTeam && (
+                          <div className="auth-feedback warn" style={{ marginTop: 10 }}>
+                            Your team already got points for this challenge. You can still solve it for yourself.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+
             <div className="ctf-block">
-              <div className="ctf-block-title">Download</div>
-              <a className="ctf-link" href={`/api/v1/challenges/${ch.id}/download`} target="_blank" rel="noreferrer">
-                Download attachment
-              </a>
-            </div>
-          )}
+              <div className="ctf-block-title">Submit flag</div>
 
-          {!ch.is_download && (
-            <div className="ctf-block">
-              <div className="ctf-block-title">Instance</div>
-
-              {!me || !team ? (
-                <div className="auth-feedback error" style={{ marginTop: 8 }}>
-                  Login and join a team to start this challenge instance.
-                </div>
+              {solvedByMe ? (
+                <div className="auth-feedback success">Already solved by you. Points were awarded once.</div>
               ) : (
                 <>
-                  {inst?.running ? (
-                    <div className="ctf-instance">
-                      <div className="ctf-row">
-                        <span className="label">Status</span>
-                        <span className="val ok">{inst.status || "running"}</span>
-                      </div>
-
-                      {inst.protocol === "http" && webUrl && (
-                        <div className="ctf-row">
-                          <span className="label">Web URL</span>
-                          <span className="val mono">
-                            <a className="ctf-link" href={webUrl} target="_blank" rel="noreferrer">
-                              {webUrl}
-                            </a>
-                          </span>
-                        </div>
-                      )}
-
-                      {inst.protocol === "tcp" && (
-                        <>
-                          {inst.tcp_host && (
-                            <div className="ctf-row">
-                              <span className="label">TCP Host</span>
-                              <span className="val mono">{inst.tcp_host}</span>
-                            </div>
-                          )}
-                          {inst.tcp_port && (
-                            <div className="ctf-row">
-                              <span className="label">TCP Port</span>
-                              <span className="val mono">{inst.tcp_port}</span>
-                            </div>
-                          )}
-                          {inst.passphrase && (
-                            <div className="ctf-row">
-                              <span className="label">Passphrase</span>
-                              <span className="val mono">{inst.passphrase}</span>
-                            </div>
-                          )}
-                        </>
-                      )}
-
-                      {remainingSeconds != null ? (
-                        <div className="ctf-row">
-                          <span className="label">TTL</span>
-                          <span className={`val mono ${remainingSeconds <= 15 * 60 ? "warn" : ""}`}>
-                            {remainingSeconds <= 0 ? "expired" : fmtTime(remainingSeconds)}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="ctf-row">
-                          <span className="label">TTL</span>
-                          <span className="val mono" style={{ opacity: 0.75 }}>
-                            unknown
-                          </span>
-                        </div>
-                      )}
-
-                      <div className="ctf-actions">
-                        <button className="auth-submit" onClick={terminate} disabled={busy} type="button">
-                          Terminate
-                        </button>
-
-                        <button
-                          className="auth-submit"
-                          onClick={extend}
-                          disabled={busy || remainingSeconds == null || remainingSeconds <= 0}
-                          title={
-                            remainingSeconds == null
-                              ? "Extend requires instance status endpoint"
-                              : remainingSeconds > 15 * 60
-                              ? "Available when TTL <= 15:00"
-                              : "Extend to 60 minutes"
-                          }
-                          type="button"
-                        >
-                          Extend (60m)
-                        </button>
-                      </div>
-
-                      <div className="ctf-note">
-                        <b>TCP challenges:</b> service may ask for a handshake password. After 3 failed attempts the
-                        connection is dropped.
-                      </div>
-                    </div>
+                  {!me || !team ? (
+                    <div className="auth-feedback error">Login and join a team to submit flags.</div>
                   ) : (
-                    <div className="ctf-actions">
-                      <button className="auth-submit" onClick={spawn} disabled={busy || solvedByMe} type="button">
-                        {busy ? "Starting..." : "Start instance"}
+                    <div className="ctf-flag">
+                      <input
+                        className="auth-input"
+                        placeholder="flag{...}"
+                        value={flag}
+                        onChange={(e) => setFlag(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            submitFlag();
+                          }
+                        }}
+                        disabled={busy}
+                      />
+                      <button className="auth-submit" onClick={submitFlag} disabled={busy} type="button">
+                        Submit
                       </button>
+                    </div>
+                  )}
 
-                      {solvedByMe && (
-                        <div className="auth-feedback warn" style={{ marginTop: 10 }}>
-                          You already solved this challenge — instance start is disabled for you.
-                        </div>
-                      )}
-
-                      {!solvedByMe && solvedByTeam && (
-                        <div className="auth-feedback warn" style={{ marginTop: 10 }}>
-                          Your team already got points for this challenge. You can still solve it for yourself.
-                        </div>
-                      )}
+                  {!solvedByMe && solvedByTeam && (
+                    <div className="auth-feedback warn" style={{ marginTop: 10 }}>
+                      Team already credited — if you submit correctly, you will still mark this as solved for yourself.
                     </div>
                   )}
                 </>
               )}
+
+              {!solvedByMe && msg && <div className={`auth-feedback ${msgKind || "warn"}`}>{msg}</div>}
             </div>
-          )}
-
-
-          <div className="ctf-block">
-            <div className="ctf-block-title">Submit flag</div>
-
-            {solvedByMe ? (
-              <div className="auth-feedback success">Already solved by you. Points were awarded once.</div>
-            ) : (
-              <>
-                {!me || !team ? (
-                  <div className="auth-feedback error">Login and join a team to submit flags.</div>
-                ) : (
-                  <div className="ctf-flag">
-                    <input
-                      className="auth-input"
-                      placeholder="flag{...}"
-                      value={flag}
-                      onChange={(e) => setFlag(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          submitFlag();
-                        }
-                      }}
-                      disabled={busy}
-                    />
-                    <button className="auth-submit" onClick={submitFlag} disabled={busy} type="button">
-                      Submit
-                    </button>
-                  </div>
-                )}
-
-                {!solvedByMe && solvedByTeam && (
-                  <div className="auth-feedback warn" style={{ marginTop: 10 }}>
-                    Team already credited — if you submit correctly, you will still mark this as solved for yourself.
-                  </div>
-                )}
-              </>
-            )}
-
-            {!solvedByMe && msg && <div className={`auth-feedback ${msgKind || "warn"}`}>{msg}</div>}
           </div>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }
 
@@ -665,6 +719,11 @@ export default function ChallengePage() {
   const [errorMsg, setErrorMsg] = useState("");
 
   const mountedRef = useRef(true);
+
+    useEffect(() => {
+      console.log("ChallengePage MOUNT");
+      return () => console.log("ChallengePage UNMOUNT");
+    }, []);
 
   useEffect(() => {
     mountedRef.current = true;

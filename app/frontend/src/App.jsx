@@ -128,6 +128,20 @@ function FullScreenLoader({ text = "Loading…" }) {
   );
 }
 
+function ProtectedRoute({ authLoading, loggedInUser, children }) {
+  if (authLoading) return <FullScreenLoader text="Authenticating…" />;
+  if (!loggedInUser) return <Navigate to="/" replace />;
+  return children;
+}
+
+function CtfGate({ ctfActive, children }) {
+  if (ctfActive === null) {
+    return <FullScreenLoader text="Synchronizing CTF status…" />;
+  }
+  if (!ctfActive) return <Navigate to="/" replace />;
+  return children;
+}
+
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -294,15 +308,6 @@ function AppContent() {
     };
   }, [ctfActive, isAdminRoute]);
 
-
-
-  // Protected user route
-  const ProtectedRoute = ({ children }) => {
-    if (authLoading) return <FullScreenLoader text="Authenticating…" />;
-    if (!loggedInUser) return <Navigate to="/" replace />;
-    return children;
-  };
-
   useEffect(() => {
     const consent = getCookie("cookie_consent");
 
@@ -436,36 +441,6 @@ function AppContent() {
       }
     }, [ctfActive, loggedInUser, logout, navigate, location.pathname]);
 
-
-  const CtfGate = ({ children }) => {
-    if (ctfActive === null) {
-      return (
-        <div className="relative min-h-[60vh]">
-          {/* blurred content placeholder */}
-          <div className="opacity-40 pointer-events-none">
-            {children}
-          </div>
-
-          {/* overlay loader */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="flex flex-col items-center gap-4">
-              <div className="h-8 w-8 rounded-full border-2 border-emerald-400/40 border-t-emerald-400 animate-spin" />
-              <span className="text-emerald-200/70 text-sm tracking-wide">
-                Synchronizing CTF status…
-              </span>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    if (!ctfActive) {
-      return <Navigate to="/" replace />;
-    }
-
-    return children;
-  };
-
   return (
     <div className="min-h-screen flex flex-col">
       <Canonical />
@@ -497,8 +472,15 @@ function AppContent() {
             <Route path="/legal-notice" element={<LegalNotice />} />
             <Route path="/contact" element={<Contact />} />
             <Route path="/read-more" element={<ReadMore />} />
-            <Route path="/verify-email" element={<CtfGate><VerifyEmail /> </CtfGate>} />
-            <Route path="/team/:teamName"element={<TeamPage /> } />
+            <Route
+              path="/verify-email"
+              element={
+                <CtfGate ctfActive={ctfActive}>
+                  <VerifyEmail />
+                </CtfGate>
+              }
+            />
+            <Route path="/team/:teamName" element={<TeamPage />} />
             <Route path="/profile/:username" element={<Profile loggedInUser={loggedInUser} />} />
             <Route path="/dual-license" element={<DualLicense />} />
 
@@ -508,21 +490,27 @@ function AppContent() {
             <Route
               path="/register"
               element={
-                <CtfGate>
+                <CtfGate ctfActive={ctfActive}>
                   <Register />
                 </CtfGate>
               }
             />
-
             <Route
               path="/login"
               element={
-                <CtfGate>
+                <CtfGate ctfActive={ctfActive}>
                   <Login setLoggedInUser={setLoggedInUser} />
                 </CtfGate>
               }
             />
-            <Route path="/reset-password" element={<CtfGate><ResetPassword /> </CtfGate>} />
+            <Route
+              path="/reset-password"
+              element={
+                <CtfGate ctfActive={ctfActive}>
+                  <ResetPassword />
+                </CtfGate>
+              }
+            />
 
             {/* ========================= */}
             {/* CTF gameplay routes */}
@@ -530,7 +518,7 @@ function AppContent() {
             <Route
               path="/challenges"
               element={
-                <CtfGate>
+                <CtfGate ctfActive={ctfActive}>
                   <ChallengesPage />
                 </CtfGate>
               }
@@ -538,7 +526,7 @@ function AppContent() {
             <Route
               path="/join-team"
               element={
-                <CtfGate>
+                <CtfGate ctfActive={ctfActive}>
                   <JoinTeam />
                 </CtfGate>
               }
@@ -550,8 +538,8 @@ function AppContent() {
             <Route
               path="/teams"
               element={
-                <ProtectedRoute>
-                  <CtfGate>
+                <ProtectedRoute authLoading={authLoading} loggedInUser={loggedInUser}>
+                  <CtfGate ctfActive={ctfActive}>
                     <Teams />
                   </CtfGate>
                 </ProtectedRoute>
@@ -560,8 +548,8 @@ function AppContent() {
             <Route
               path="/captain-panel/:teamName"
               element={
-                <ProtectedRoute>
-                  <CtfGate>
+                <ProtectedRoute authLoading={authLoading} loggedInUser={loggedInUser}>
+                  <CtfGate ctfActive={ctfActive}>
                     <CaptainPanel />
                   </CtfGate>
                 </ProtectedRoute>
@@ -571,13 +559,15 @@ function AppContent() {
             <Route
               path="/account/delete"
               element={
-                <ProtectedRoute>
-                  <CtfGate>
+                <ProtectedRoute authLoading={authLoading} loggedInUser={loggedInUser}>
+                  <CtfGate ctfActive={ctfActive}>
                     {loggedInUser &&
                     (loggedInUser.role === "USER" || loggedInUser.role === "user") &&
                     !loggedInUser?.token_data?.mfa_recovery ? (
-                      <AccountDelete loggedInUser={loggedInUser} 
-                      setLoggedInUser={setLoggedInUser}/>
+                      <AccountDelete
+                        loggedInUser={loggedInUser}
+                        setLoggedInUser={setLoggedInUser}
+                      />
                     ) : (
                       <Navigate to="/" replace />
                     )}
@@ -592,7 +582,7 @@ function AppContent() {
             <Route
               path="/mfa/reset"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute authLoading={authLoading} loggedInUser={loggedInUser}>
                   <MfaReset setLoggedInUser={setLoggedInUser} />
                 </ProtectedRoute>
               }
@@ -600,7 +590,7 @@ function AppContent() {
             <Route
               path="/mfa/setup"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute authLoading={authLoading} loggedInUser={loggedInUser}>
                   <MfaSetup loggedInUser={loggedInUser} />
                 </ProtectedRoute>
               }
@@ -632,6 +622,7 @@ function AppContent() {
             <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
+
 
         <footer className="relative w-full mt-0 text-emerald-50/80">
           {/* Top separator line (matches navbar glow) */}
