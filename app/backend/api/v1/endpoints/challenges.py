@@ -261,25 +261,24 @@ async def list_challenges(challenge_repo: ChallengesRepositoryDep):
 
 
 def _enrich_team(team: TeamWithScoresInResponse):
+    # Access Pydantic model fields with dot notation
     scores = team.scores
 
     if not scores:
         final_score = 0
-        total_points = 0
-        first_reached_time = None
+        # If no score, set time to max so they are sorted last if needed (though score 0 puts them last anyway)
+        first_reached_time = datetime.max
     else:
-        final_score = scores[-1]["score"]
-        total_points = scores[-1]["score"]
+        # 1. Use the pre-calculated total_score from the object
+        final_score = team.total_score
 
-        first_reached_time = next(
-            (s["date_time"] for s in scores if s["score"] == final_score),
-            scores[0]["date_time"],
-        )
+        # 2. Since scores are already sorted chronologically in get_rankings,
+        # the time they reached their current total is simply the time of the LAST solve.
+        first_reached_time = scores[-1].date_time
 
     return {
         "team": team,
         "final_score": final_score,
-        "total_points": total_points,
         "first_reached_time": first_reached_time,
     }
 
