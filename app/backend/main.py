@@ -72,6 +72,8 @@ def _create_fastapi_backend(app_settings: BackendBaseSettings) -> fastapi.FastAP
             "/api/v1/users/admin/login",
             "/api/v1/users/me",
             "/api/v1/contact",
+            "/api/v1/challenges/rankings",
+            "/api/v1/teams",
         },
         allowlist_prefixes=(
             "/assets",
@@ -81,7 +83,7 @@ def _create_fastapi_backend(app_settings: BackendBaseSettings) -> fastapi.FastAP
             "/team/",
             "/profile/",
             "/api/v1/users/profile/",
-            "/api/v1//teams/by-name/",
+            "/api/v1/teams/by-name/",
         ),
     )
 
