@@ -16,7 +16,7 @@ spec:
       serviceAccountName: backend-sa
       containers:
       - name: backend
-        image: ghcr.io/kubosis/pwndepot/backend:98c3b17
+        image: ghcr.io/kubosis/pwndepot/backend:a8be81b
         ports:
         - containerPort: 8000
 
