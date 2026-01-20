@@ -23,6 +23,7 @@ export default function TeamPage() {
   const [showTeamDeletePass, setShowTeamDeletePass] = useState(false);
   const [team, setTeam] = useState(null);
   const [chartData, setChartData] = useState([]);
+  const [teamRank, setTeamRank] = useState(null);
   const [notFound, setNotFound] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [cursor, setCursor] = useState({ x: 0, y: 0 });
@@ -82,6 +83,21 @@ export default function TeamPage() {
 
       setTeam(data);
       setNotFound(false);
+
+      // ---- compute team rank (scoreboard position) ----
+      try {
+        const r = await api.get("/challenges/rankings");
+        const teams = r.data || [];
+
+        const sorted = teams
+          .slice()
+          .sort((a, b) => (b.total_score ?? 0) - (a.total_score ?? 0));
+
+        const idx = sorted.findIndex((t) => t.team_name === data.team_name);
+        setTeamRank(idx >= 0 ? idx + 1 : null);
+      } catch {
+        setTeamRank(null);
+      }
 
       // /users/me is optional: if 401 -> treat as guest
       try {
@@ -283,6 +299,9 @@ export default function TeamPage() {
               <strong>
                 {!isLoggedIn ? "guest" : isCaptain ? "captain" : isMemberOfThisTeam ? "member" : "viewer"}
               </strong>
+            </span>
+            <span className="scoreboard-pill">
+              Team Rank: <strong>{teamRank ?? "—"}</strong>
             </span>
           </div>
         </header>

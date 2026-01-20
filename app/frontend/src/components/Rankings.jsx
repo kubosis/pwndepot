@@ -742,7 +742,7 @@ export default function Rankings() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedTeams.slice(0, 5).map((team, index) => (
+                    {sortedTeams.map((team, index) => (
                       <tr key={team.name}>
                         <td className="mono">{index + 1}</td>
                         <td>
