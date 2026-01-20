@@ -14,7 +14,13 @@ if [ -z "${CTF_FLAG:-}" ]; then
   exit 0
 fi
 
-echo -n "$CTF_FLAG" | base64 -w 0 > "$TMPBASE"
+if [[ "${CTF_FLAG}" == flag\{*\} ]]; then
+  FINAL_FLAG="${CTF_FLAG}"
+else
+  FINAL_FLAG="flag{${CTF_FLAG}}"
+fi
+
+echo -n "${FINAL_FLAG}" | base64 -w 0 > "$TMPBASE"
 
 hex=$(xxd -p -c 256 "$TMPBASE" | tr -d '\n' | sed 's/../& /g')
 echo "0000: $hex" > "$TMPHEX"
