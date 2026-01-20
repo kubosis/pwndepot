@@ -145,7 +145,7 @@ cat > "$OUTDIR/index.html" <<'HTML'
     <h2>Tips</h2>
     <ul>
       <li>Wireshark: open the PCAP and inspect packet bytes.</li>
-      <li>The payload contains a Base64 string. Decode it to get <code>flag{...}</code>.</li>
+      <li>The payload contains a Base64 string. Decode it to get <code>xxxxxxxx</code>.</li>
     </ul>
   </div>
 </body>
