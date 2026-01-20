@@ -131,7 +131,7 @@ cat > "$OUTDIR/index.html" <<'HTML'
       Decoding it reveals the flag.
     </p>
 
-    <a class="btn" href="./network_capture.pcap">
+    <a class="btn" href="network_capture.pcap">
       Download network_capture.pcap <span class="tag">PCAP</span>
     </a>
 
