@@ -414,7 +414,7 @@ export default function Rankings() {
       ctx.fillText(points, margin.left - 12, y);
     }
 
-    // ---------- X labels ----------
+    // ---------- X labels (SUPER CLEAN: zero overlap, last always visible) ----------
     ctx.save();
     ctx.font = "12px sans-serif";
     ctx.fillStyle = "rgba(235,255,245,0.72)";
@@ -424,56 +424,58 @@ export default function Rankings() {
     const rotate = allTs.length > 18;
     const angle = rotate ? -Math.PI / 6 : 0;
 
-    // How many labels can we fit?
-    const MIN_LABEL_PX = rotate ? 80 : 100;
-    const maxLabels = Math.max(2, Math.floor(innerWidth / MIN_LABEL_PX));
-    const step = Math.max(1, Math.ceil(allTs.length / maxLabels));
+    // HARD GAP in CANVAS px
+    const minGapPx = rotate ? 130 : 110;
 
-    const tickIdx = new Set([0, allTs.length - 1]);
-    for (let i = 0; i < allTs.length; i += step) tickIdx.add(i);
-
-    let lastLabelRight = -Infinity;
-    const PAD = 10;
-
-    for (let i = 0; i < allTs.length; i++) {
-      if (!tickIdx.has(i)) continue;
-
-      const ts = allTs[i];
-      const x = geom.xPos.get(ts);
-
-      // Vertical grid only for ticks
-      ctx.beginPath();
-      ctx.moveTo(x, margin.top + yMargin);
-      ctx.lineTo(x, margin.top + innerHeight - yMargin);
-      ctx.stroke();
-
-      const label = i === 0 ? "start" : toAxisLabel(ts);
-
-      const w = ctx.measureText(label).width;
-      const effectiveW = rotate ? w * 0.9 : w;
-      const left = x - effectiveW / 2;
-      const right = x + effectiveW / 2;
-
-      // Anti-collision (even ticks can be dense)
-      if (i !== 0 && i !== allTs.length - 1 && left < lastLabelRight + PAD) continue;
+    function drawTick(x, label, { align = "center", drawGrid = true } = {}) {
+      if (drawGrid) {
+        ctx.beginPath();
+        ctx.moveTo(x, margin.top + yMargin);
+        ctx.lineTo(x, margin.top + innerHeight - yMargin);
+        ctx.stroke();
+      }
 
       ctx.save();
       ctx.translate(x, margin.top + innerHeight - yMargin + 8);
       if (rotate) ctx.rotate(angle);
 
-      ctx.textAlign = rotate
-        ? "right"
-        : i === 0
-        ? "left"
-        : i === allTs.length - 1
-        ? "right"
-        : "center";
+      ctx.textAlign = align;
       ctx.textBaseline = "top";
-
       ctx.fillText(label, 0, 0);
       ctx.restore();
+    }
 
-      lastLabelRight = right;
+    if (allTs.length > 0) {
+      const firstTs = allTs[0];
+      const lastTs = allTs[allTs.length - 1];
+
+      const xFirst = geom.xPos.get(firstTs);
+      const xLast = geom.xPos.get(lastTs);
+
+      // 1) Always draw first + last
+      drawTick(xFirst, "start", { align: rotate ? "left" : "left" });
+      drawTick(xLast, toAxisLabel(lastTs), { align: rotate ? "right" : "right" });
+
+      // 2) Draw middle ticks with strict spacing, AND reserve space for last
+      let lastDrawnX = xFirst;
+
+      // Do not draw any middle label within `minGapPx` of the last label
+      const stopBeforeX = xLast - minGapPx;
+
+      for (let i = 1; i < allTs.length - 1; i++) {
+        const ts = allTs[i];
+        const x = geom.xPos.get(ts);
+        if (x == null) continue;
+
+        // reserve space for last label
+        if (x > stopBeforeX) break;
+
+        // strict spacing
+        if (x - lastDrawnX < minGapPx) continue;
+
+        drawTick(x, toAxisLabel(ts), { align: rotate ? "right" : "center" });
+        lastDrawnX = x;
+      }
     }
 
     ctx.restore();

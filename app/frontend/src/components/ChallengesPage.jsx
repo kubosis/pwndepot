@@ -668,7 +668,7 @@ function ChallengeModal({
                     <div className="ctf-flag">
                       <input
                         className="auth-input"
-                        placeholder="flag{...}"
+                        placeholder="flag{...} or xxxxxxxx"
                         value={flag}
                         onChange={(e) => setFlag(e.target.value)}
                         onKeyDown={(e) => {
