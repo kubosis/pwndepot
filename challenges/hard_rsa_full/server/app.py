@@ -3,6 +3,13 @@ import os, json, pathlib
 
 app = Flask(__name__)
 
+@app.get("/")
+def index():
+    return jsonify({
+        "name": "hard_rsa_full",
+        "endpoints": ["/pub", "/cipher"]
+    })
+
 # pub.json est un dossier au-dessus de /server
 pub_path = pathlib.Path(__file__).parent.parent / "pub.json"
 with open(pub_path, "r", encoding="utf-8") as f:
