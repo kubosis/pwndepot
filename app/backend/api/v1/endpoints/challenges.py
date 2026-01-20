@@ -329,7 +329,6 @@ async def get_rankings(team_repo: TeamsRepositoryDep):
     enriched.sort(
         key=lambda x: (
             -x["final_score"],  # finalScore DESC
-            -x["total_points"],  # totalPoints DESC
             x["first_reached_time"],  # firstReachedTime ASC
         )
     )
