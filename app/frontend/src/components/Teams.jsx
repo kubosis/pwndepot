@@ -20,6 +20,7 @@ export default function Teams() {
   const [checkingTeam, setCheckingTeam] = useState(true);
 
   const [teamName, setTeamName] = useState("");
+  const [teamJustCreated, setTeamJustCreated] = useState(false);
   const [teamPassword, setTeamPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
@@ -44,8 +45,10 @@ export default function Teams() {
         if (cancelled) return;
 
         if (res.status === 200) {
-          navigate(`/team/${res.data.team_name}`);
-          return;
+          if (!teamJustCreated) {
+            navigate(`/team/${res.data.team_name}`);
+            return;
+          }
         }
       } catch (err) {
         if (cancelled) return;
@@ -65,7 +68,7 @@ export default function Teams() {
     return () => {
       cancelled = true;
     };
-  }, [navigate]);
+  }, [navigate, teamJustCreated]);
 
   // -------------------------
   // Input rules (UX)
@@ -125,6 +128,8 @@ export default function Teams() {
         team_name: trimmedName,
         team_password: teamPassword,
       });
+
+      setTeamJustCreated(true);
 
       const data = res.data;
 

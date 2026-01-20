@@ -1,10 +1,12 @@
 // Rankings.jsx
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable no-unused-vars */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import "../index.css";
-import { api } from "../config/api"
+import { api } from "../config/api";
 
-// Helper function to generate a distinct color for each team based on its index
+// Helper: distinct color for each team
 const getDistinctColor = (index, total) =>
   `hsl(${(360 / Math.max(1, total)) * index}, 70%, 50%)`;
 
@@ -22,127 +24,348 @@ export default function Rankings() {
   const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
 
   // ---------------------------
-  // Mock data for frontend testing (kept as-is)
+  // Date helpers
   // ---------------------------
- useEffect(() => {
-  let mounted = true;
-
-  function toTimeLabel(dateStr) {
+  function toTs(dateStr) {
     const d = new Date(dateStr);
-    if (Number.isNaN(d.getTime())) return "00:00";
-    const hh = String(d.getHours()).padStart(2, "0");
-    const mm = String(d.getMinutes()).padStart(2, "0");
-    return `${hh}:${mm}`;
+    const t = d.getTime();
+    return Number.isNaN(t) ? 0 : t;
   }
 
+  // Label with full local date-time (not used on axis directly)
+  function toDateTimeLabel(dateStr) {
+    const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return "1970-01-01 00:00";
+    const yyyy = String(d.getFullYear());
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mi = String(d.getMinutes()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+  }
+
+  // Axis label: MM-DD HH:mm (important: same time on different days is unique)
+  function toAxisLabel(ts) {
+    const d = new Date(ts);
+    if (Number.isNaN(d.getTime())) return "";
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mi = String(d.getMinutes()).padStart(2, "0");
+    return `${mm}-${dd} ${hh}:${mi}`;
+  }
+
+  // ---------------------------
+  // Build cumulative scores
+  // ---------------------------
   function buildCumulativeScores(scoreRecords) {
-    // scoreRecords from backend: [{ date_time, score, obtained_by, ... }]
     const sorted = [...(scoreRecords || [])].sort(
-      (a, b) => new Date(a.date_time).getTime() - new Date(b.date_time).getTime()
+      (a, b) => toTs(a.date_time) - toTs(b.date_time)
     );
 
     let acc = 0;
-    const out = [{ time: "00:00", points: 0 }];
+
+    // Start point: 1 second before first solve (or now if empty)
+    const firstTs = sorted.length ? toTs(sorted[0].date_time) : Date.now();
+    const startTs = firstTs - 1000;
+
+    const out = [
+      {
+        ts: startTs,
+        label: toDateTimeLabel(new Date(startTs).toISOString()),
+        points: 0,
+        isStart: true,
+      },
+    ];
 
     for (const r of sorted) {
       const delta = Number(r.score || 0);
       acc += delta;
-      out.push({ time: toTimeLabel(r.date_time), points: acc });
+      out.push({
+        ts: toTs(r.date_time),
+        label: toDateTimeLabel(r.date_time),
+        points: acc,
+        isStart: false,
+      });
     }
 
     return out;
   }
 
-  async function loadTeams() {
-    try {
-      // Full list with history per team (team-unique score records)
-      const res = await api.get("/teams");
-      const rows = Array.isArray(res.data) ? res.data : [];
+  // ---------------------------
+  // Fetch teams
+  // ---------------------------
+  useEffect(() => {
+    let mounted = true;
 
-      const mapped = rows.map((t) => ({
-        id: t.team_id,
-        name: t.team_name,
-        // IMPORTANT: chart expects cumulative points
-        scores: buildCumulativeScores(t.scores),
-        // keep total if you want it later
-        total_score: Number(t.total_score || 0),
-      }));
+    async function loadTeams() {
+      try {
+        const res = await api.get("/teams");
+        const rows = Array.isArray(res.data) ? res.data : [];
 
-      if (!mounted) return;
+        const mapped = rows.map((t) => ({
+          id: t.team_id,
+          name: t.team_name,
+          scores: buildCumulativeScores(t.scores),
+          total_score: Number(t.total_score || 0),
+        }));
 
-      setTeams(mapped);
+        if (!mounted) return;
 
-      const colors = {};
-      mapped.forEach((t, i) => {
-        colors[t.name] = getDistinctColor(i, mapped.length);
-      });
-      setTeamColors(colors);
-    } catch {
-      if (!mounted) return;
-      setTeams([]);
-      setTeamColors({});
+        setTeams(mapped);
+
+        const colors = {};
+        mapped.forEach((t, i) => {
+          colors[t.name] = getDistinctColor(i, mapped.length);
+        });
+        setTeamColors(colors);
+      } catch {
+        if (!mounted) return;
+        setTeams([]);
+        setTeamColors({});
+      }
     }
-  }
 
-  loadTeams();
-  return () => {
-    mounted = false;
-  };
-}, []);
-
-
-  const getTooltipStyle = () => {
-  const canvas = canvasRef.current;
-  if (!canvas) return { display: "none" };
-
-  const rect = canvas.getBoundingClientRect();
-  const tooltipWidth = 190;
-  const tooltipHeight = 56;
-  const pad = 10;
-
-  let top = cursorPos.y - tooltipHeight - 10;
-  if (top < pad) top = cursorPos.y + 12;
-
-  let left = cursorPos.x + 14;
-  if (left + tooltipWidth > rect.width - pad) left = cursorPos.x - tooltipWidth - 14;
-
-  top = Math.max(pad, Math.min(top, rect.height - tooltipHeight - pad));
-  left = Math.max(pad, Math.min(left, rect.width - tooltipWidth - pad));
-
-  return { position: "absolute", top, left };
-};
+    loadTeams();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // ---------------------------
-  // Sort teams (kept as-is)
+  // Tooltip positioning (CSS pixels)
+  // ---------------------------
+  const getTooltipStyle = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { display: "none" };
+
+    const rect = canvas.getBoundingClientRect();
+    const tooltipWidth = 210;
+    const tooltipHeight = 60;
+    const pad = 10;
+
+    let top = cursorPos.y - tooltipHeight - 10;
+    if (top < pad) top = cursorPos.y + 12;
+
+    let left = cursorPos.x + 14;
+    if (left + tooltipWidth > rect.width - pad)
+      left = cursorPos.x - tooltipWidth - 14;
+
+    top = Math.max(pad, Math.min(top, rect.height - tooltipHeight - pad));
+    left = Math.max(pad, Math.min(left, rect.width - tooltipWidth - pad));
+
+    return { position: "absolute", top, left };
+  };
+
+  // ---------------------------
+  // Sort teams 
   // ---------------------------
   const sortedTeams = useMemo(() => {
     return [...teams]
       .map((t) => {
         const finalScore = t.scores[t.scores.length - 1]?.points || 0;
-        const totalPoints = t.scores.length ? t.scores[t.scores.length - 1].points : 0;
-        const firstReachedTime =
-          t.scores.find((s) => s.points === finalScore)?.time || t.scores[0]?.time || "00:00";
-        return { ...t, finalScore, totalPoints, firstReachedTime };
+        const totalPoints = finalScore;
+
+        // earliest timestamp when it reached finalScore
+        const firstReachedTs =
+          t.scores.find((s) => s.points === finalScore)?.ts ??
+          t.scores[0]?.ts ??
+          0;
+
+        return { ...t, finalScore, totalPoints, firstReachedTs };
       })
       .sort((a, b) => {
         if (b.finalScore !== a.finalScore) return b.finalScore - a.finalScore;
         if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
-        return a.firstReachedTime.localeCompare(b.firstReachedTime);
+        return a.firstReachedTs - b.firstReachedTs;
       });
   }, [teams]);
 
-  // ---------------------------
-  // Chart data
-  // ---------------------------
-  const chartTeams = useMemo(
-    () => sortedTeams.filter((t) => t.scores.some((s) => s.points > 0)),
-    [sortedTeams]
-  );
+  // Only teams that have >0 at least once
+  // Teams eligible for chart: must have >0 points at least once
+  const chartTeams = useMemo(() => {
+    return sortedTeams.filter((t) =>
+      Array.isArray(t.scores) && t.scores.some((s) => (s?.points ?? 0) > 0)
+    );
+  }, [sortedTeams]);
 
+  // We draw at most TOP 5 teams
   const topTeams = useMemo(() => chartTeams.slice(0, 5), [chartTeams]);
 
   // ---------------------------
-  // Canvas chart rendering (kept as-is, only styling-neutral)
+  // Time binning (for large number of points)
+  // Prevents "1000 points on 900px canvas" overlaps.
+  //
+  // Idea: bucket by time resolution, keep LAST score per bucket (still cumulative).
+  // ---------------------------
+  function binScores(scores, bucketMs) {
+    if (!Array.isArray(scores) || scores.length === 0) return [];
+    if (!bucketMs || bucketMs <= 0) return scores;
+
+    const out = [];
+    let lastBucket = null;
+
+    for (const s of scores) {
+      const bucket = Math.floor(s.ts / bucketMs);
+      if (bucket !== lastBucket) {
+        out.push({ ...s });
+        lastBucket = bucket;
+      } else {
+        // same bucket -> overwrite with the latest (keeps cumulative correct)
+        out[out.length - 1] = { ...s };
+      }
+    }
+    return out;
+  }
+
+  // Pick bucket size dynamically based on how many timestamps we have on canvas width.
+  // We target roughly <= 220 points across allTs (for readability).
+  function chooseBucketMs(allTs) {
+    if (!allTs.length) return 0;
+
+    // If <= 240 unique timestamps, no need to bin
+    if (allTs.length <= 240) return 0;
+
+    // Otherwise bin to 1min / 5min / 15min / 1h
+    // (progressively stronger binning)
+    const ONE_MIN = 60_000;
+    const FIVE_MIN = 5 * ONE_MIN;
+    const FIFTEEN_MIN = 15 * ONE_MIN;
+    const ONE_HOUR = 60 * ONE_MIN;
+
+    if (allTs.length <= 600) return ONE_MIN;
+    if (allTs.length <= 1500) return FIVE_MIN;
+    if (allTs.length <= 4000) return FIFTEEN_MIN;
+    return ONE_HOUR;
+  }
+
+  // ---------------------------
+  // Geometry helper used by BOTH render and hover.
+  // This guarantees hover hits exactly what you draw.
+  // ---------------------------
+  function computePointGeometry({
+    canvas,
+    topTeamsInput,
+    teamColorsInput,
+  }) {
+    const width = canvas.width;
+    const height = canvas.height;
+    const margin = { top: 50, bottom: 130, left: 110, right: 70 };
+
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
+    const yMargin = 20;
+
+    // 1) Gather ALL timestamps (raw)
+    const rawAllTs = Array.from(
+      new Set(topTeamsInput.flatMap((t) => t.scores.map((s) => s.ts)))
+    )
+      .filter((x) => Number.isFinite(x))
+      .sort((a, b) => a - b);
+
+    // 2) Determine bin size and bin each team's scores
+    const bucketMs = chooseBucketMs(rawAllTs);
+
+    const binnedTeams = topTeamsInput.map((t) => ({
+      ...t,
+      // Bin scores to reduce total timestamps and points
+      scores: binScores(t.scores, bucketMs),
+    }));
+
+    // Recompute timestamps AFTER binning
+    const allTs = Array.from(
+      new Set(binnedTeams.flatMap((t) => t.scores.map((s) => s.ts)))
+    )
+      .filter((x) => Number.isFinite(x))
+      .sort((a, b) => a - b);
+
+    // X position mapping (index-based)
+    const xPos = new Map();
+    allTs.forEach((ts, i) => {
+      const x = margin.left + (i / Math.max(1, allTs.length - 1)) * innerWidth;
+      xPos.set(ts, x);
+    });
+
+    // Max points (for scaling)
+    const maxPoints = Math.max(
+      1,
+      ...binnedTeams.flatMap((t) => t.scores.map((s) => s.points))
+    );
+    const yScale = (innerHeight - 2 * yMargin) / (maxPoints * 1.1 || 1);
+
+    // Jitter settings:
+    // - X jitter spreads points that share same (ts, points)
+    // - Y jitter spreads points that share same (ts, points) symmetrically
+    const X_JITTER_MAX = 10;
+    const Y_JITTER_STEP = 6;
+
+    function jitterStep(count) {
+      // Keep step small and bounded; grows automatically with crowding.
+      // More overlapping points => more spread, but still capped.
+      // We want jitter <= X_JITTER_MAX
+      if (count <= 1) return 0;
+      const step = Math.floor((2 * X_JITTER_MAX) / (count - 1));
+      return Math.max(1, Math.min(4, step));
+    }
+
+    // Precompute per timestamp+score overlap groups for speed
+    // Key: `${ts}|${points}` => array of teamNames sorted by draw order
+    const overlapMap = new Map();
+    for (const t of binnedTeams) {
+      for (const s of t.scores) {
+        const key = `${s.ts}|${s.points}`;
+        if (!overlapMap.has(key)) overlapMap.set(key, []);
+        overlapMap.get(key).push(t.name);
+      }
+    }
+
+    // For stable jitter assignment, sort names in the same order as binnedTeams
+    for (const [key, arr] of overlapMap.entries()) {
+      const order = new Map(binnedTeams.map((t, idx) => [t.name, idx]));
+      arr.sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
+      overlapMap.set(key, arr);
+    }
+
+    // Return a function that converts (teamName, scoreObj) -> {x,y}
+    function pointXY(teamName, s) {
+      const baseX = xPos.get(s.ts);
+      if (baseX == null) return null;
+
+      const key = `${s.ts}|${s.points}`;
+      const group = overlapMap.get(key) || [];
+      const idx = group.indexOf(teamName);
+      const count = group.length;
+
+      // Centered jitter index: e.g. count=5 => idx - 2
+      const centered = idx - (count - 1) / 2;
+
+      const xStep = jitterStep(count);
+      const x = baseX + centered * xStep;
+
+      const yJ = centered * Y_JITTER_STEP;
+      const y =
+        margin.top + innerHeight - yMargin - s.points * yScale - yJ;
+
+      return { x, y, idx, count };
+    }
+
+    return {
+      margin,
+      innerWidth,
+      innerHeight,
+      yMargin,
+      yScale,
+      maxPoints,
+      xPos,
+      allTs,
+      bucketMs,
+      binnedTeams,
+      pointXY,
+    };
+  }
+
+  // ---------------------------
+  // Canvas chart rendering
   // ---------------------------
   useEffect(() => {
     if (!teams.length || !topTeams.length) return;
@@ -152,18 +375,26 @@ export default function Rankings() {
     const width = canvas.width;
     const height = canvas.height;
 
-    const margin = { top: 40, bottom: 60, left: 70, right: 50 };
-    const innerWidth = width - margin.left - margin.right;
-    const innerHeight = height - margin.top - margin.bottom;
-    const yMargin = 20;
-
     ctx.clearRect(0, 0, width, height);
 
-    const allTimes = Array.from(new Set(topTeams.flatMap((t) => t.scores.map((s) => s.time)))).sort();
-    const maxPoints = Math.max(...topTeams.flatMap((t) => t.scores.map((s) => s.points)));
-    const yScale = (innerHeight - 2 * yMargin) / (maxPoints * 1.1 || 1);
+    const geom = computePointGeometry({
+      canvas,
+      topTeamsInput: topTeams,
+      teamColorsInput: teamColors,
+    });
 
-    // Grid + Y labels
+    const {
+      margin,
+      innerWidth,
+      innerHeight,
+      yMargin,
+      allTs,
+      maxPoints,
+      binnedTeams,
+      pointXY,
+    } = geom;
+
+    // ---------- Grid + Y labels ----------
     ctx.font = "12px sans-serif";
     ctx.fillStyle = "rgba(235,255,245,0.72)";
     ctx.strokeStyle = "rgba(255,255,255,0.12)";
@@ -171,6 +402,7 @@ export default function Rankings() {
 
     for (let i = 0; i <= 5; i++) {
       const y = margin.top + yMargin + (innerHeight - 2 * yMargin) * (i / 5);
+
       ctx.beginPath();
       ctx.moveTo(margin.left, y);
       ctx.lineTo(width - margin.right, y);
@@ -182,77 +414,106 @@ export default function Rankings() {
       ctx.fillText(points, margin.left - 12, y);
     }
 
-    // X labels + vertical grid
-    ctx.textBaseline = "top";
-    allTimes.forEach((time, i) => {
-      const x = margin.left + (i / Math.max(1, allTimes.length - 1)) * innerWidth;
+    // ---------- X labels ----------
+    ctx.save();
+    ctx.font = "12px sans-serif";
+    ctx.fillStyle = "rgba(235,255,245,0.72)";
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.lineWidth = 1;
+
+    const rotate = allTs.length > 18;
+    const angle = rotate ? -Math.PI / 6 : 0;
+
+    // How many labels can we fit?
+    const MIN_LABEL_PX = rotate ? 80 : 100;
+    const maxLabels = Math.max(2, Math.floor(innerWidth / MIN_LABEL_PX));
+    const step = Math.max(1, Math.ceil(allTs.length / maxLabels));
+
+    const tickIdx = new Set([0, allTs.length - 1]);
+    for (let i = 0; i < allTs.length; i += step) tickIdx.add(i);
+
+    let lastLabelRight = -Infinity;
+    const PAD = 10;
+
+    for (let i = 0; i < allTs.length; i++) {
+      if (!tickIdx.has(i)) continue;
+
+      const ts = allTs[i];
+      const x = geom.xPos.get(ts);
+
+      // Vertical grid only for ticks
       ctx.beginPath();
       ctx.moveTo(x, margin.top + yMargin);
       ctx.lineTo(x, margin.top + innerHeight - yMargin);
       ctx.stroke();
 
-      ctx.textAlign =
-        i === 0 ? "left" : i === allTimes.length - 1 ? "right" : "center";
-      ctx.fillText(time, x, margin.top + innerHeight - yMargin + 8);
-    });
+      const label = i === 0 ? "start" : toAxisLabel(ts);
 
-    // Lines + dots
-    topTeams.forEach((team) => {
+      const w = ctx.measureText(label).width;
+      const effectiveW = rotate ? w * 0.9 : w;
+      const left = x - effectiveW / 2;
+      const right = x + effectiveW / 2;
+
+      // Anti-collision (even ticks can be dense)
+      if (i !== 0 && i !== allTs.length - 1 && left < lastLabelRight + PAD) continue;
+
+      ctx.save();
+      ctx.translate(x, margin.top + innerHeight - yMargin + 8);
+      if (rotate) ctx.rotate(angle);
+
+      ctx.textAlign = rotate
+        ? "right"
+        : i === 0
+        ? "left"
+        : i === allTs.length - 1
+        ? "right"
+        : "center";
+      ctx.textBaseline = "top";
+
+      ctx.fillText(label, 0, 0);
+      ctx.restore();
+
+      lastLabelRight = right;
+    }
+
+    ctx.restore();
+
+    // ---------- Lines + dots ----------
+    for (const team of binnedTeams) {
       const color = teamColors[team.name] || "#fff";
       ctx.strokeStyle = color;
       ctx.lineWidth = 2;
 
+      // Lines
       for (let i = 0; i < team.scores.length - 1; i++) {
         const s1 = team.scores[i];
         const s2 = team.scores[i + 1];
 
-        const x1 =
-          margin.left +
-          (allTimes.indexOf(s1.time) / Math.max(1, allTimes.length - 1)) * innerWidth;
-        const x2 =
-          margin.left +
-          (allTimes.indexOf(s2.time) / Math.max(1, allTimes.length - 1)) * innerWidth;
-
-        const overlapping1 = topTeams.filter(
-          (t2) => t2.scores.find((s) => s.time === s1.time)?.points === s1.points
-        );
-        const idx1 = overlapping1.findIndex((t2) => t2.name === team.name);
-
-        const overlapping2 = topTeams.filter(
-          (t2) => t2.scores.find((s) => s.time === s2.time)?.points === s2.points
-        );
-        const idx2 = overlapping2.findIndex((t2) => t2.name === team.name);
-
-        const y1 = margin.top + innerHeight - yMargin - s1.points * yScale - idx1 * 6;
-        const y2 = margin.top + innerHeight - yMargin - s2.points * yScale - idx2 * 6;
+        const p1 = pointXY(team.name, s1);
+        const p2 = pointXY(team.name, s2);
+        if (!p1 || !p2) continue;
 
         ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
         ctx.stroke();
       }
 
-      team.scores.forEach((s) => {
-        const x =
-          margin.left +
-          (allTimes.indexOf(s.time) / Math.max(1, allTimes.length - 1)) * innerWidth;
-
-        const overlapping = topTeams.filter(
-          (t2) => t2.scores.find((sc) => sc.time === s.time)?.points === s.points
-        );
-        const idx = overlapping.findIndex((t2) => t2.name === team.name);
-        const y = margin.top + innerHeight - yMargin - s.points * yScale - idx * 6;
+      // Dots
+      for (const s of team.scores) {
+        const p = pointXY(team.name, s);
+        if (!p) continue;
 
         ctx.beginPath();
-        ctx.arc(x, y, 3, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
         ctx.fillStyle = color;
         ctx.fill();
-      });
-    });
+      }
+    }
   }, [topTeams, teamColors, teams]);
 
   // ---------------------------
-  // Hover tooltip logic (kept as-is)
+  // Hover logic: uses same geometry as draw
   // ---------------------------
   const handleMouseMove = (e) => {
     const canvas = canvasRef.current;
@@ -260,64 +521,46 @@ export default function Rankings() {
 
     const rect = canvas.getBoundingClientRect();
 
-    // mouse in CSS pixels (for tooltip positioning)
+    // Cursor in CSS pixels (tooltip positioning)
     const cssX = e.clientX - rect.left;
     const cssY = e.clientY - rect.top;
     setCursorPos({ x: cssX, y: cssY });
 
     if (!topTeams.length) return;
 
-    // convert mouse -> canvas coordinate system
+    // Convert mouse -> canvas coordinate system
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     const mx = cssX * scaleX;
     const my = cssY * scaleY;
 
-    const allTimes = Array.from(
-      new Set(topTeams.flatMap((t) => t.scores.map((s) => s.time)))
-    ).sort();
-
-    const margin = { top: 40, bottom: 60, left: 70, right: 50 };
-    const innerWidth = canvas.width - margin.left - margin.right;
-    const innerHeight = canvas.height - margin.top - margin.bottom;
-
-    const maxPoints = Math.max(...topTeams.flatMap((t) => t.scores.map((s) => s.points)));
-    const yMargin = 20;
-    const yScale = (innerHeight - 2 * yMargin) / (maxPoints * 1.1 || 1);
+    const geom = computePointGeometry({
+      canvas,
+      topTeamsInput: topTeams,
+      teamColorsInput: teamColors,
+    });
 
     let closestTeam = null;
     let closestIndex = null;
     let closestDistance = Infinity;
 
-    topTeams.forEach((team) => {
-      team.scores.forEach((s, i) => {
-        const x =
-          margin.left +
-          (allTimes.indexOf(s.time) / Math.max(1, allTimes.length - 1)) * innerWidth;
+    // NOTE: we hover over Binned teams (since we draw binned)
+    for (const team of geom.binnedTeams) {
+      for (let i = 0; i < team.scores.length; i++) {
+        const s = team.scores[i];
+        const p = geom.pointXY(team.name, s);
+        if (!p) continue;
 
-        const overlapping = topTeams.filter(
-          (t2) => t2.scores.find((sc) => sc.time === s.time)?.points === s.points
-        );
-        const idx = overlapping.findIndex((t2) => t2.name === team.name);
-
-        const y =
-          margin.top +
-          innerHeight -
-          yMargin -
-          s.points * yScale -
-          idx * 6;
-
-        const d = Math.hypot(x - mx, y - my);
+        const d = Math.hypot(p.x - mx, p.y - my);
         if (d < closestDistance) {
           closestDistance = d;
           closestTeam = team;
           closestIndex = i;
         }
-      });
-    });
+      }
+    }
 
-    // threshold in CANVAS pixels (not CSS)
-    const HIT_RADIUS = 16; // tweak 12-20
+    const HIT_RADIUS = 16; // in canvas pixels
     if (closestDistance <= HIT_RADIUS) {
       setHoveredTeam(closestTeam);
       setHoveredIndex(closestIndex);
@@ -333,9 +576,8 @@ export default function Rankings() {
   };
 
   return (
-    // Full-bleed section like Register/Home (prevents background clipping issues)
     <section className="relative w-screen left-1/2 -translate-x-1/2 overflow-x-clip min-h-screen -mt-24 pt-24 pb-14">
-      {/* Background layers (1:1 with Home/Register style) */}
+      {/* Background layers */}
       <div className="absolute inset-0 z-0" aria-hidden="true">
         <div
           className="absolute inset-0 opacity-55"
@@ -389,7 +631,10 @@ export default function Rankings() {
               teams: <strong>{sortedTeams.length}</strong>
             </span>
             <span className="scoreboard-pill">
-              chart: <strong>top {Math.min(5, chartTeams.length)}</strong>
+              chart:{" "}
+              <strong>
+                {chartTeams.length === 0 ? "hidden" : `top ${Math.min(5, chartTeams.length)}`}
+              </strong>
             </span>
           </div>
         </header>
@@ -404,8 +649,17 @@ export default function Rankings() {
           </div>
         ) : (
           <>
+            {/* If teams exist but nobody scored yet */}
+            {teams.length > 0 && chartTeams.length === 0 && (
+              <div className="scoreboard-empty">
+                <div className="scoreboard-empty-title">No scores yet</div>
+                <div className="scoreboard-empty-subtitle">
+                  Teams exist, but nobody has scored points yet. The chart will appear after the first solve.
+                </div>
+              </div>
+            )}
             {/* Chart */}
-            {topTeams.length > 0 && (
+            {chartTeams.length > 0 && topTeams.length > 0 && (
               <section className="scoreboard-card">
                 <div className="scoreboard-card-head">
                   <div>
@@ -426,11 +680,8 @@ export default function Rankings() {
                   />
 
                   {/* Tooltip */}
-                  {hoveredTeam && hoveredIndex !== null && (
-                    <div
-                      className="scoreboard-tooltip"
-                      style={getTooltipStyle()}
-                    >
+                  {hoveredTeam && hoveredIndex !== null && hoveredTeam.scores?.[hoveredIndex] && (
+                    <div className="scoreboard-tooltip" style={getTooltipStyle()}>
                       <div className="scoreboard-tooltip-title">
                         <span
                           className="scoreboard-tooltip-swatch"
@@ -439,6 +690,13 @@ export default function Rankings() {
                         {hoveredTeam.name}
                       </div>
                       <div className="scoreboard-tooltip-body">
+                        Time:{" "}
+                        <strong>
+                          {hoveredTeam.scores[hoveredIndex].isStart
+                            ? "start"
+                            : hoveredTeam.scores[hoveredIndex].label}
+                        </strong>
+                        <br />
                         Score: <strong>{hoveredTeam.scores[hoveredIndex].points}</strong>
                       </div>
                     </div>
@@ -482,7 +740,7 @@ export default function Rankings() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedTeams.map((team, index) => (
+                    {sortedTeams.slice(0, 5).map((team, index) => (
                       <tr key={team.name}>
                         <td className="mono">{index + 1}</td>
                         <td>
