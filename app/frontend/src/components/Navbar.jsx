@@ -51,6 +51,7 @@ export default function Navbar({
         { to: "/teams", label: "Teams" },
         { to: "/rankings", label: "Scoreboard" },
         { to: "/contact", label: "Contact" },
+        { to: "/challenges", label: "Challenges" },
       ];
     }
     return [
@@ -58,6 +59,7 @@ export default function Navbar({
       { to: "/rankings", label: "Scoreboard" },
       { to: "/contact", label: "Contact" },
       { to: `/profile/${loggedInUser.username}`, label: "My Profile" },
+      { to: "/challenges", label: "Challenges"},
     ];
   }, [ctfActive, loggedInUser]);
 
