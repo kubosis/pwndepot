@@ -30,10 +30,36 @@ const NO_REFRESH_ENDPOINTS = [
   "/ctf-status",
   "/ctf-start",
   "/ctf-stop",
+  "/users/me",
+  "/users/me/solved",
+  "/teams/me/solved",
+  "/teams/myteam",
+  "/teams/myteam/invite",
   // MFA endpoints
   "/mfa/admin/verify",
   "/mfa/verify",
+  "/mfa/setup",
+  "/mfa/enable",
 ];
+
+function normalizePath(url) {
+  if (!url) return "";
+
+  let p = url;
+  try {
+    if (p.startsWith("http://") || p.startsWith("https://")) {
+      p = new URL(p).pathname;
+    }
+  } catch { /* ignore */}
+
+  p = p.split("?")[0];
+
+  if (!p.startsWith("/")) p = "/" + p;
+
+  p = p.replace(/^\/api\/v1/, "");
+
+  return p;
+}
 
 // -----------------------------
 // CTF END detection helper
@@ -92,7 +118,7 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config || {};
-    const requestUrl = originalRequest?.url || "";
+    const requestPath = normalizePath(originalRequest?.url || "");
 
     // -----------------------------------------
     // 1) GLOBAL CTF_ENDED handling (403)
@@ -110,9 +136,10 @@ api.interceptors.response.use(
     // -----------------------------------------
     // 2) 401 refresh flow 
     // -----------------------------------------
-    const shouldSkipRefresh = NO_REFRESH_ENDPOINTS.some((endpoint) =>
-      requestUrl === endpoint || requestUrl.startsWith(endpoint + "?")
-    );
+    const shouldSkipRefresh = NO_REFRESH_ENDPOINTS.some((endpoint) => {
+      const ep = normalizePath(endpoint);
+      return requestPath === ep;
+    });
 
     if (
       error.response?.status === 401 &&
@@ -136,11 +163,13 @@ api.interceptors.response.use(
       await refreshPromise;
       return api(originalRequest);
       } catch (refreshError) {
-        window.dispatchEvent(new Event("auth-logout"));
+        const st = refreshError?.response?.status;
+        if (st !== 401 && st !== 403) {
+          window.dispatchEvent(new Event("auth-logout"));
+        }
         return Promise.reject(refreshError);
       }
     }
-
     return Promise.reject(error);
   }
 );

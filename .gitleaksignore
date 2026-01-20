@@ -31,4 +31,5 @@ app/frontend/src/components/JoinTeam.jsx:jwt:172
 app/frontend/src/components/Profile.jsx:jwt:399
 app/frontend/src/components/Rankings.jsx:jwt:344
 app/frontend/src/App.jsx:jwt:102
+app/frontend/src/components/AdminPage.jsx:jwt:1344
 

@@ -18,6 +18,7 @@ html, body, #root {
 }
 
 body {
+  position: relative;
   overflow-x: hidden;
   background: #050a07;
   color: rgba(255, 255, 255, 0.92);
@@ -27,6 +28,11 @@ body {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  position: relative;
+  z-index: 0;              
 }
 
 /* =========================================
@@ -1679,9 +1685,10 @@ body {
 .admin-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 80;
-  display: grid;
-  place-items: center;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 18px;
   background: rgba(0,0,0,0.70);
   backdrop-filter: blur(6px);
@@ -2731,9 +2738,10 @@ body {
 .team-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 90;
-  display: grid;
-  place-items: center;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 18px;
   background: rgba(0,0,0,0.70);
   backdrop-filter: blur(6px);
@@ -2742,10 +2750,11 @@ body {
 .team-modal {
   width: min(620px, 100%);
   border-radius: 18px;
+  max-height: calc(100vh - 36px);
   border: 1px solid rgba(110,255,190,0.18);
   background: rgba(0,0,0,0.42);
   box-shadow: 0 30px 120px rgba(0,0,0,0.75);
-  overflow: hidden;
+  overflow: auto;
   position: relative;
 }
 
@@ -3683,14 +3692,20 @@ body {
 
 /* Modal */
 .ctf-modal-overlay{
-  position:fixed; inset:0;
+  position: fixed;
+  inset: 0;
   background: rgba(0,0,0,0.62);
-  display:flex; align-items:center; justify-content:center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 18px;
-  z-index: 50;
+  z-index: 9999; 
 }
 .ctf-modal{
   width: min(860px, 100%);
+  max-height: calc(100vh - 36px);
+  display: flex;
+  flex-direction: column;
   border-radius: 18px;
   border: 1px solid rgba(110,255,190,0.18);
   background: rgba(5,10,7,0.92);
@@ -3727,7 +3742,7 @@ body {
 .ctf-x:hover{
   background: rgba(255,255,255,0.10);
 }
-.ctf-body{ padding: 16px; display:grid; gap: 14px; }
+.ctf-body{ padding: 16px; display:grid; gap: 14px; overflow: auto; }
 .ctf-block{
   border: 1px solid rgba(110,255,190,0.14);
   border-radius: 14px;
