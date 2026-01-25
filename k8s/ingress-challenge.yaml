@@ -6,13 +6,20 @@ metadata:
   annotations:
     kubernetes.io/ingress.class: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure   
-    traefik.ingress.kubernetes.io/router.middlewares: default-redirect-to-https@kubernetescrd,default-redirect-to-www@kubernetescrd,default-challenge-strip-prefix@kubernetescrd
+    traefik.ingress.kubernetes.io/router.middlewares: default-redirect-to-https@kubernetescrd,default-redirect-to-www@kubernetescrd,default-challenge-slash-redirect@kubernetescrd,default-challenge-strip-prefix@kubernetescrd,default-security-headers@kubernetescrd
 spec:
   rules:
   - host: pwndep0t.com
     http:
       paths:
       - path: /challenge
+        pathType: Exact
+        backend:
+          service:
+            name: backend
+            port:
+              number: 8000
+      - path: /challenge/
         pathType: Prefix
         backend:
           service:
@@ -23,6 +30,13 @@ spec:
     http:
       paths:
       - path: /challenge
+        pathType: Exact
+        backend:
+          service:
+            name: backend
+            port:
+              number: 8000
+      - path: /challenge/
         pathType: Prefix
         backend:
           service:

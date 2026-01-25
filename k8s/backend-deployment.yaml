@@ -14,6 +14,10 @@ spec:
         app: backend
     spec:
       serviceAccountName: backend-sa
+      volumes:
+      - name: geoip-db
+        persistentVolumeClaim:
+          claimName: geoip-pvc
       containers:
       - name: backend
         image: ghcr.io/kubosis/pwndepot/backend:75218fd
@@ -73,6 +77,8 @@ spec:
 
         - name: REDIS_URL
           value: "redis://redis:6379/0"
+        - name: GEOIP_DB_PATH
+          value: "/project/assets/GeoLite2-Country.mmdb"
         - name: FRONTEND_DOMAIN
           value: "https://www.pwndep0t.com"
 
@@ -84,6 +90,10 @@ spec:
           value: "50"
         - name: PUBLIC_TCP_HOST
           value: pwndep0t.com
+        volumeMounts:
+        - name: geoip-db
+          mountPath: /project/assets
+          readOnly: true
         resources:
           limits:
             memory: "512Mi"

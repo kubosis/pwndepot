@@ -98,6 +98,29 @@ export default function MfaSetup({ loggedInUser }) {
   };
 
   const downloadBackupCodes = () => {
+    const codes = backupCodes || [];
+    const cols = 2;
+    const rows = Math.ceil(codes.length / cols);
+
+    const numbered = codes.map((c, i) => `${String(i + 1).padStart(2, "0")}. ${c}`);
+    const colWidth = Math.max(...numbered.map((s) => s.length), 0) + 6;
+
+    const lines = [];
+    for (let r = 0; r < rows; r++) {
+      const left = numbered[r] ?? "";
+      const right = numbered[r + rows] ?? "";
+      lines.push(left.padEnd(colWidth) + right);
+    }
+
+    const generatedOn = new Intl.DateTimeFormat(undefined, {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).format(new Date());
+
     const content = [
       "PwnDepot MFA Backup Codes",
       "========================",
@@ -105,12 +128,12 @@ export default function MfaSetup({ loggedInUser }) {
       "Save these codes in a safe place.",
       "Each code can be used only once.",
       "",
-      ...backupCodes,
+      ...lines,
       "",
-      "Generated on: " + new Date().toISOString(),
+      "Generated on: " + generatedOn,
     ].join("\n");
 
-    const blob = new Blob([content], { type: "text/plain" });
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
 
     const a = document.createElement("a");
@@ -298,6 +321,12 @@ export default function MfaSetup({ loggedInUser }) {
                               onChange={(e) => {
                                 setCode(e.target.value);
                                 if (error) setError("");
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleEnable();
+                                }
                               }}
                               className="auth-input mono mfa-code"
                             />

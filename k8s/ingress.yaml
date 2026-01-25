@@ -7,7 +7,7 @@ metadata:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
     cert-manager.io/cluster-issuer: letsencrypt-prod
     # Apply both redirects
-    traefik.ingress.kubernetes.io/router.middlewares: default-redirect-to-https@kubernetescrd,default-redirect-to-www@kubernetescrd
+    traefik.ingress.kubernetes.io/router.middlewares: default-redirect-to-https@kubernetescrd,default-redirect-to-www@kubernetescrd,default-security-headers@kubernetescrd
 spec:
   tls:
   - hosts:
