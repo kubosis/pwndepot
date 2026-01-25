@@ -1,0 +1,30 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: security-headers
+  namespace: default
+spec:
+  headers:
+    # basic ones
+    contentTypeNosniff: true
+    frameDeny: true
+    browserXssFilter: true
+    referrerPolicy: "strict-origin-when-cross-origin"
+
+    # HSTS
+    stsSeconds: 15552000 # 180 days
+    stsIncludeSubdomains: true
+    stsPreload: false
+
+    # Cross-Origin policies
+    customResponseHeaders:
+      Cross-Origin-Opener-Policy: "same-origin"
+      Cross-Origin-Resource-Policy: "same-site"
+      Cross-Origin-Embedder-Policy: "require-corp"
+      Permissions-Policy: "geolocation=(), microphone=(), camera=()"
+
+      # CSP
+      Content-Security-Policy: "default-src 'self' https:; img-src 'self' https: data:; style-src 'self' https: 'unsafe-inline'; script-src 'self' https: 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+
+      # Expect-CT
+      Expect-CT: "max-age=86400, enforce"

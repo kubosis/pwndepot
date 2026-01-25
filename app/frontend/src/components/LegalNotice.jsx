@@ -25,7 +25,7 @@ function LegalNotice() {
 
       <h2>Purpose</h2>
       <p>
-        The Platform is a non-commercial educational project carried out within the framework of the
+        The Platform is a educational project carried out within the framework of the
         Software Security subject at ISEP (Institut Supérieur d'Électronique de Paris).
       </p>
     </>

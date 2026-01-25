@@ -1,0 +1,33 @@
+name: ZAP Baseline (prod)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 0" # sunday 03:00 UTC
+
+jobs:
+  zap-baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: "https://www.pwndep0t.com"
+          rules_file_name: ""
+          cmd_options: >
+            -a
+            -j
+            -m 5
+            -T 10
+            -r zap_baseline_report.html
+            -J zap_baseline_report.json
+            --hook=/zap/hooks/hook.py
+          allow_issue_writing: false
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-baseline-report
+          path: |
+            zap_baseline_report.html
+            zap_baseline_report.json

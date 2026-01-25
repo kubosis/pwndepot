@@ -3,7 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import decouple
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
 backend_settings = None
@@ -22,6 +22,7 @@ class BackendBaseSettings(BaseSettings):
     COOKIE_DOMAIN: str | None = None
 
     LOGO_PATH: Path = Path("/project/assets/pwndepot_standard.png")
+    GEOIP_DB_PATH: str | None = Field(default=None)
 
     # REQUIRED FOR TEAM INVITES (Fix)
     FRONTEND_DOMAIN: str = decouple.config("FRONTEND_DOMAIN", default="http://localhost")

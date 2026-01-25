@@ -1058,6 +1058,13 @@ export default function AdminPage({ loggedInUser, setLoggedInUser, onLogout, ctf
                           if (deleteError) setDeleteError("");
                           if (mfaSuccess) setMfaSuccess("");
                         }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (deleteMfaStep) confirmDeleteWithMfa();
+                            else confirmDeleteNoMfa();
+                          }
+                        }}
                         disabled={deleteMfaStep || modalLoading}
                         className="admin-input has-toggle"
                       />
@@ -1216,6 +1223,13 @@ export default function AdminPage({ loggedInUser, setLoggedInUser, onLogout, ctf
                           setAdminPassword(e.target.value);
                           if (statusError) setStatusError("");
                           if (mfaSuccess) setMfaSuccess("");
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (statusMfaStep) confirmStatusWithMfa();
+                            else confirmStatusNoMfa();
+                          }
                         }}
                         disabled={statusMfaStep || modalLoading}
                         className="admin-input has-toggle"

@@ -1,0 +1,10 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: challenge-slash-redirect
+  namespace: default
+spec:
+  redirectRegex:
+    regex: ^/challenge$
+    replacement: /challenge/
+    permanent: true

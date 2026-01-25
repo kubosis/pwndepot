@@ -117,6 +117,7 @@ export default function CaptainPanel() {
   };
 
   const updatePassword = async () => {
+    if (loading) return;
     resetMessages();
 
     if (newPassword.length < 8) {
@@ -172,6 +173,7 @@ export default function CaptainPanel() {
   };
 
   const confirmDelete = async () => {
+    if (loading) return;
     resetMessages();
 
     if (teamPasswordForDelete.length < 8) {
@@ -339,6 +341,13 @@ export default function CaptainPanel() {
                   placeholder="Enter new team password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (loading) return;
+                      updatePassword();
+                    }
+                  }}
                 />
                 <button
                   type="button"
@@ -365,6 +374,13 @@ export default function CaptainPanel() {
                     placeholder="Confirm with account password"
                     value={accountPassword}
                     onChange={(e) => setAccountPassword(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        if (loading) return;
+                        updatePassword();
+                      }
+                    }}
                   />
                   <button
                     type="button"
@@ -441,6 +457,13 @@ export default function CaptainPanel() {
                       placeholder="Enter team password to confirm"
                       value={teamPasswordForDelete}
                       onChange={(e) => setTeamPasswordForDelete(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          if (loading) return;
+                          confirmDelete();
+                        }
+                      }}
                     />
                     <button
                       type="button"

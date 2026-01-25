@@ -27,6 +27,7 @@ export default function TeamPage() {
   const [notFound, setNotFound] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [cursor, setCursor] = useState({ x: 0, y: 0 });
+  const [loading, setLoading] = useState(false);
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
@@ -142,10 +143,13 @@ export default function TeamPage() {
   };
 
   const deleteTeamNow = async () => {
+    if (loading) return;
+    setLoading(true);
     setShowTeamDeletePass(false);
     if (teamPasswordForDelete.length < 8) {
       setModalMessage("Team password must be at least 8 characters.");
       setModalError(true);
+      setLoading(false);
       return;
     }
 
@@ -160,6 +164,8 @@ export default function TeamPage() {
     } catch (err) {
       setModalMessage(err.response?.data?.detail || "Failed to delete team.");
       setModalError(true);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -557,6 +563,13 @@ export default function TeamPage() {
                           placeholder="Enter team password"
                           value={teamPasswordForDelete}
                           onChange={(e) => setTeamPasswordForDelete(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              if (loading) return;
+                              deleteTeamNow();
+                            }
+                          }}
                         />
                         <button
                           type="button"
@@ -620,8 +633,13 @@ export default function TeamPage() {
 
               <div className="team-modal-actions">
                 {modalType === "captain_alone" && (
-                  <button className="team-btn team-btn-danger" onClick={deleteTeamNow}>
-                    Delete Team
+                  <button
+                    className="team-btn team-btn-danger"
+                    onClick={deleteTeamNow}
+                    disabled={loading}
+                    type="button"
+                  >
+                    {loading ? "Working…" : "Delete Team"}
                   </button>
                 )}
 

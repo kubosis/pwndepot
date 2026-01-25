@@ -5,6 +5,7 @@ from enum import Enum
 from sqlalchemy import select
 
 from app.backend.db.models import SecurityDevice
+from app.backend.security.geo_ip import client_ip, resolve_country
 
 
 class SecurityEventType(str, Enum):
@@ -30,8 +31,12 @@ async def emit_security_event(
 
     now = datetime.utcnow()
 
+    ip = client_ip(request) or "unknown"
+    country = resolve_country(request)
+
     meta = {
-        "ip": request.client.host if request.client else "unknown",
+        "ip": ip,
+        "country": country,
         "user_agent": request.headers.get("user-agent"),
         "time": format_security_time(now),
     }

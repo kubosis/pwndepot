@@ -148,7 +148,7 @@ export default function Register() {
   const ruleLen = formData.password.length >= 12;
   const ruleUpper = /[A-Z]/.test(formData.password);
   const ruleNum = /[0-9]/.test(formData.password);
-  const ruleSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(formData.password);
+  const ruleSpecial = /[^a-zA-Z0-9]/.test(formData.password);
 
   return (
     // Full-bleed section exactly like Home (no CSS pseudo-element tricks)
