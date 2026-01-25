@@ -4,6 +4,7 @@ from pydantic import BaseModel, EmailStr, Field, constr, field_validator
 
 from app.backend.db.models import RoleEnum, StatusEnum
 from app.backend.schema.base import BaseSchemaModel
+from app.backend.schema.validators.password import validate_strong_password
 
 
 # ------------------------------
@@ -18,6 +19,8 @@ class UserInCreate(BaseSchemaModel):
 
     email: EmailStr
 
+    password: constr(min_length=12, max_length=128)
+
     @field_validator("email")
     @classmethod
     def normalize_email(cls, v: str) -> str:
@@ -28,10 +31,10 @@ class UserInCreate(BaseSchemaModel):
     def normalize_username(cls, v: str) -> str:
         return v.strip()
 
-    # Secure password rules:
-    # - Minimum 12 characters
-    # - Maximum 128 characters (DoS protection)
-    password: constr(min_length=12, max_length=128)
+    @field_validator("password")
+    @classmethod
+    def strong_password(cls, v: str) -> str:
+        return validate_strong_password(v)
 
 
 class ResendVerificationRequest(BaseModel):
@@ -46,6 +49,11 @@ class UserStatusUpdate(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str
     password: constr(min_length=12, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def strong_password(cls, v: str) -> str:
+        return validate_strong_password(v)
 
 
 # ------------------------------
@@ -64,6 +72,13 @@ class UserInUpdate(BaseSchemaModel):
     email: EmailStr | None = None
 
     password: constr(min_length=12, max_length=128) | None = None
+
+    @field_validator("password")
+    @classmethod
+    def strong_password(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        return validate_strong_password(v)
 
 
 # ------------------------------
